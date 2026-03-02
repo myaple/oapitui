@@ -16,7 +16,7 @@ use std::{
     io,
     path::PathBuf,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
@@ -49,6 +49,7 @@ pub struct App {
     // Per-server cached specs
     pub specs: HashMap<String, Arc<OpenAPI>>,
     pub spec_loading: HashMap<String, bool>,
+    pub last_refreshed: HashMap<String, Instant>,
 
     // Background message channel
     pub tx: UnboundedSender<BgMsg>,
@@ -81,6 +82,7 @@ impl App {
             config_path,
             specs: HashMap::new(),
             spec_loading: HashMap::new(),
+            last_refreshed: HashMap::new(),
             tx,
             rx,
             screen: Screen::ServerList,
@@ -135,6 +137,7 @@ impl App {
         match msg {
             BgMsg::SpecLoaded { server_name, spec } => {
                 self.spec_loading.remove(&server_name);
+                self.last_refreshed.insert(server_name.clone(), Instant::now());
                 self.specs.insert(server_name, Arc::new(*spec));
             }
             BgMsg::SpecError { server_name, error } => {

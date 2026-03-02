@@ -93,11 +93,17 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             lines.push(Line::from(""));
             lines.push(Line::from(vec![
                 Span::styled("Endpoints: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::styled(
-                    ep_count.to_string(),
-                    Style::default().fg(Color::Cyan),
-                ),
+                Span::styled(ep_count.to_string(), Style::default().fg(Color::Cyan)),
             ]));
+            if let Some(refreshed) = app.last_refreshed.get(&server.name) {
+                lines.push(Line::from(vec![
+                    Span::styled("Refreshed: ", Style::default().add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format_elapsed(refreshed.elapsed().as_secs()),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]));
+            }
             if let Some(info_desc) = &spec.info.description {
                 let desc = if info_desc.len() > 200 {
                     format!("{}…", &info_desc[..200])
@@ -124,5 +130,17 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
 
         let detail = Paragraph::new(lines);
         f.render_widget(detail, chunks[1]);
+    }
+}
+
+fn format_elapsed(secs: u64) -> String {
+    if secs < 60 {
+        format!("{}s ago", secs)
+    } else if secs < 3600 {
+        format!("{}m ago", secs / 60)
+    } else if secs < 86400 {
+        format!("{}h ago", secs / 3600)
+    } else {
+        format!("{}d ago", secs / 86400)
     }
 }
