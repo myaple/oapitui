@@ -65,8 +65,14 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             };
             Row::new(vec![
                 Cell::from(Span::styled(req_marker, Style::default().fg(Color::Red))),
-                Cell::from(Span::styled(kind_label, Style::default().fg(Color::DarkGray))),
-                Cell::from(Span::styled(row.name.clone(), Style::default().fg(Color::Cyan))),
+                Cell::from(Span::styled(
+                    kind_label,
+                    Style::default().fg(Color::DarkGray),
+                )),
+                Cell::from(Span::styled(
+                    row.name.clone(),
+                    Style::default().fg(Color::Cyan),
+                )),
                 Cell::from(Span::styled(
                     row.type_label.clone(),
                     Style::default().fg(Color::DarkGray),
@@ -180,12 +186,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
 
     // ── Method badge (top-right overlay) ──────────────────────────────────────
 
-    let method_area = Rect::new(
-        area.x + area.width.saturating_sub(12),
-        area.y,
-        10,
-        1,
-    );
+    let method_area = Rect::new(area.x + area.width.saturating_sub(12), area.y, 10, 1);
     let badge = Paragraph::new(rb.method.as_str()).style(
         Style::default()
             .fg(super::method_color(&rb.method))

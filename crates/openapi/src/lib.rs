@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
-use openapiv3::{OpenAPI, Operation, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
+use openapiv3::{
+    OpenAPI, Operation, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type,
+};
 use serde_json::{json, Value};
 
 pub use openapiv3;
@@ -124,7 +126,13 @@ fn resolve_param(p: &ReferenceOr<Parameter>, spec: &OpenAPI) -> Option<ResolvedP
                 .as_ref()?
                 .parameters
                 .get(name)
-                .and_then(|r| if let ReferenceOr::Item(i) = r { Some(i) } else { None })?
+                .and_then(|r| {
+                    if let ReferenceOr::Item(i) = r {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                })?
         }
     };
 
@@ -177,9 +185,7 @@ fn resolve_param(p: &ReferenceOr<Parameter>, spec: &OpenAPI) -> Option<ResolvedP
     })
 }
 
-fn extract_param_schema(
-    format: &openapiv3::ParameterSchemaOrContent,
-) -> Option<Schema> {
+fn extract_param_schema(format: &openapiv3::ParameterSchemaOrContent) -> Option<Schema> {
     match format {
         openapiv3::ParameterSchemaOrContent::Schema(ror) => match ror {
             ReferenceOr::Item(s) => Some(s.clone()),
@@ -195,12 +201,7 @@ fn collect_body(op: &Operation, spec: &OpenAPI) -> Option<ResolvedBody> {
         ReferenceOr::Item(b) => b,
         ReferenceOr::Reference { reference } => {
             let name = reference.split('/').last()?;
-            match spec
-                .components
-                .as_ref()?
-                .request_bodies
-                .get(name)?
-            {
+            match spec.components.as_ref()?.request_bodies.get(name)? {
                 ReferenceOr::Item(b) => b,
                 _ => return None,
             }
@@ -212,12 +213,7 @@ fn collect_body(op: &Operation, spec: &OpenAPI) -> Option<ResolvedBody> {
         .content
         .get("application/json")
         .map(|m| ("application/json".to_string(), m))
-        .or_else(|| {
-            body.content
-                .iter()
-                .next()
-                .map(|(k, v)| (k.clone(), v))
-        })?;
+        .or_else(|| body.content.iter().next().map(|(k, v)| (k.clone(), v)))?;
 
     let example = media
         .schema
@@ -290,11 +286,9 @@ pub fn generate_example(schema: &Schema, spec: &OpenAPI, depth: usize) -> Value 
                 for (prop_name, prop_ref) in &o.properties {
                     let val = match prop_ref {
                         ReferenceOr::Item(s) => generate_example(s, spec, depth + 1),
-                        ReferenceOr::Reference { reference } => {
-                            resolve_schema_ref(reference, spec)
-                                .map(|s| generate_example(&s, spec, depth + 1))
-                                .unwrap_or(json!(null))
-                        }
+                        ReferenceOr::Reference { reference } => resolve_schema_ref(reference, spec)
+                            .map(|s| generate_example(&s, spec, depth + 1))
+                            .unwrap_or(json!(null)),
                     };
                     map.insert(prop_name.clone(), val);
                 }
@@ -316,17 +310,15 @@ pub fn generate_example(schema: &Schema, spec: &OpenAPI, depth: usize) -> Value 
             }
             Value::Object(map)
         }
-        SchemaKind::OneOf { one_of } | SchemaKind::AnyOf { any_of: one_of } => {
-            one_of
-                .first()
-                .map(|ror| match ror {
-                    ReferenceOr::Item(s) => generate_example(s, spec, depth + 1),
-                    ReferenceOr::Reference { reference } => resolve_schema_ref(reference, spec)
-                        .map(|s| generate_example(&s, spec, depth + 1))
-                        .unwrap_or(json!(null)),
-                })
-                .unwrap_or(json!(null))
-        }
+        SchemaKind::OneOf { one_of } | SchemaKind::AnyOf { any_of: one_of } => one_of
+            .first()
+            .map(|ror| match ror {
+                ReferenceOr::Item(s) => generate_example(s, spec, depth + 1),
+                ReferenceOr::Reference { reference } => resolve_schema_ref(reference, spec)
+                    .map(|s| generate_example(&s, spec, depth + 1))
+                    .unwrap_or(json!(null)),
+            })
+            .unwrap_or(json!(null)),
         SchemaKind::Not { .. } => json!(null),
         SchemaKind::Any(_) => json!(null),
     }

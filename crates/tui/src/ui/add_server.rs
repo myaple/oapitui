@@ -45,22 +45,20 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         inactive_style
     };
 
-    let name_input = Paragraph::new(app.add_server.name.as_str())
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(name_style)
-                .title(" Name "),
-        );
+    let name_input = Paragraph::new(app.add_server.name.as_str()).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(name_style)
+            .title(" Name "),
+    );
     f.render_widget(name_input, rows[0]);
 
-    let url_input = Paragraph::new(app.add_server.url.as_str())
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(url_style)
-                .title(" OpenAPI JSON URL "),
-        );
+    let url_input = Paragraph::new(app.add_server.url.as_str()).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(url_style)
+            .title(" OpenAPI JSON URL "),
+    );
     f.render_widget(url_input, rows[2]);
 
     // Show cursor in active field
@@ -68,8 +66,5 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         AddServerField::Name => (rows[0], &app.add_server.name),
         AddServerField::Url => (rows[2], &app.add_server.url),
     };
-    f.set_cursor_position((
-        cur_row.x + cur_val.len() as u16 + 1,
-        cur_row.y + 1,
-    ));
+    f.set_cursor_position((cur_row.x + cur_val.len() as u16 + 1, cur_row.y + 1));
 }

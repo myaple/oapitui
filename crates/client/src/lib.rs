@@ -78,12 +78,7 @@ pub async fn execute(req: &RequestDef) -> Result<ResponseResult> {
     let headers: Vec<(String, String)> = response
         .headers()
         .iter()
-        .map(|(k, v)| {
-            (
-                k.to_string(),
-                v.to_str().unwrap_or("<binary>").to_string(),
-            )
-        })
+        .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("<binary>").to_string()))
         .collect();
 
     let body = response.text().await.unwrap_or_default();

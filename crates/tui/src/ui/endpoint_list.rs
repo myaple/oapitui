@@ -47,7 +47,9 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             let path_span = Span::styled(
                 format!(" {}", ep.path),
                 if i == el.selected {
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::White)
                 },
@@ -72,8 +74,8 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(list, list_area, &mut list_state);
 
     if el.filter_active {
-        let filter_bar = Paragraph::new(format!("/ {}", el.filter))
-            .style(Style::default().fg(Color::Yellow));
+        let filter_bar =
+            Paragraph::new(format!("/ {}", el.filter)).style(Style::default().fg(Color::Yellow));
         f.render_widget(filter_bar, chunks[1]);
     }
 

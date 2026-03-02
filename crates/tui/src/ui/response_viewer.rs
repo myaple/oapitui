@@ -18,9 +18,12 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         rv.elapsed_ms
     );
 
-    let outer = Block::default()
-        .borders(Borders::ALL)
-        .title(Span::styled(title, Style::default().fg(status_color).add_modifier(Modifier::BOLD)));
+    let outer = Block::default().borders(Borders::ALL).title(Span::styled(
+        title,
+        Style::default()
+            .fg(status_color)
+            .add_modifier(Modifier::BOLD),
+    ));
 
     let inner = outer.inner(area);
     f.render_widget(outer, area);

@@ -47,7 +47,11 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
             ("r", "refresh"),
             ("^C", "quit"),
         ],
-        Screen::AddServer => &[("Tab", "switch field"), ("Enter", "confirm"), ("Esc", "cancel")],
+        Screen::AddServer => &[
+            ("Tab", "switch field"),
+            ("Enter", "confirm"),
+            ("Esc", "cancel"),
+        ],
         Screen::EndpointList => &[
             ("↑/k↓/j", "navigate"),
             ("/", "filter"),

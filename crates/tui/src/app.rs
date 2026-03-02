@@ -1,8 +1,6 @@
 use crate::views::{
-    add_server::AddServerState,
-    endpoint_list::EndpointListState,
-    request_builder::RequestBuilderState,
-    response_viewer::ResponseViewerState,
+    add_server::AddServerState, endpoint_list::EndpointListState,
+    request_builder::RequestBuilderState, response_viewer::ResponseViewerState,
     server_list::ServerListState,
 };
 use anyhow::Result;
@@ -137,7 +135,8 @@ impl App {
         match msg {
             BgMsg::SpecLoaded { server_name, spec } => {
                 self.spec_loading.remove(&server_name);
-                self.last_refreshed.insert(server_name.clone(), Instant::now());
+                self.last_refreshed
+                    .insert(server_name.clone(), Instant::now());
                 self.specs.insert(server_name, Arc::new(*spec));
             }
             BgMsg::SpecError { server_name, error } => {
@@ -273,8 +272,12 @@ impl App {
             KeyCode::Backspace => {
                 use AddServerField::*;
                 match self.add_server.field {
-                    Name => { self.add_server.name.pop(); }
-                    Url => { self.add_server.url.pop(); }
+                    Name => {
+                        self.add_server.name.pop();
+                    }
+                    Url => {
+                        self.add_server.url.pop();
+                    }
                 }
             }
             KeyCode::Char(c) => {
@@ -360,8 +363,12 @@ impl App {
                     let tx = self.tx.clone();
                     tokio::spawn(async move {
                         match oaitui_client::execute(&req).await {
-                            Ok(resp) => { let _ = tx.send(BgMsg::ResponseReady(resp)); }
-                            Err(e) => { let _ = tx.send(BgMsg::ResponseError(e.to_string())); }
+                            Ok(resp) => {
+                                let _ = tx.send(BgMsg::ResponseReady(resp));
+                            }
+                            Err(e) => {
+                                let _ = tx.send(BgMsg::ResponseError(e.to_string()));
+                            }
                         }
                     });
                 }
@@ -391,10 +398,10 @@ impl App {
                     (None, KeyCode::Esc) | (None, KeyCode::Tab) => {
                         rb.focus = FocusedPane::ParamsNav;
                     }
-                    (None, KeyCode::Char('h')) | (None, KeyCode::Left)  => rb.cursor_left(),
+                    (None, KeyCode::Char('h')) | (None, KeyCode::Left) => rb.cursor_left(),
                     (None, KeyCode::Char('l')) | (None, KeyCode::Right) => rb.cursor_right(),
-                    (None, KeyCode::Char('k')) | (None, KeyCode::Up)    => rb.cursor_up(),
-                    (None, KeyCode::Char('j')) | (None, KeyCode::Down)  => rb.cursor_down(),
+                    (None, KeyCode::Char('k')) | (None, KeyCode::Up) => rb.cursor_up(),
+                    (None, KeyCode::Char('j')) | (None, KeyCode::Down) => rb.cursor_down(),
                     (None, KeyCode::Char('0')) => rb.cursor_line_start(),
                     (None, KeyCode::Char('$')) => rb.cursor_line_end(),
                     (None, KeyCode::Char('G')) => rb.body_goto_bottom(),

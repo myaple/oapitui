@@ -30,8 +30,8 @@ impl Config {
         }
         let text = std::fs::read_to_string(&p)
             .with_context(|| format!("reading config {}", p.display()))?;
-        let cfg: Config = toml::from_str(&text)
-            .with_context(|| format!("parsing config {}", p.display()))?;
+        let cfg: Config =
+            toml::from_str(&text).with_context(|| format!("parsing config {}", p.display()))?;
         Ok(cfg)
     }
 
@@ -44,8 +44,7 @@ impl Config {
             std::fs::create_dir_all(parent)?;
         }
         let text = toml::to_string_pretty(self)?;
-        std::fs::write(&p, text)
-            .with_context(|| format!("writing config {}", p.display()))?;
+        std::fs::write(&p, text).with_context(|| format!("writing config {}", p.display()))?;
         Ok(())
     }
 
