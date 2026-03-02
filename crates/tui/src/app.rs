@@ -374,29 +374,47 @@ impl App {
             },
 
             // ── Bottom pane: vim normal mode ──────────────────────────────────
-            FocusedPane::BodyNormal => match code {
-                KeyCode::Esc | KeyCode::Tab => rb.focus = FocusedPane::ParamsNav,
-                KeyCode::Char('h') | KeyCode::Left  => rb.cursor_left(),
-                KeyCode::Char('l') | KeyCode::Right => rb.cursor_right(),
-                KeyCode::Char('k') | KeyCode::Up    => rb.cursor_up(),
-                KeyCode::Char('j') | KeyCode::Down  => rb.cursor_down(),
-                KeyCode::Char('0') => rb.cursor_line_start(),
-                KeyCode::Char('$') => rb.cursor_line_end(),
-                KeyCode::Char('I') => {
-                    rb.cursor_line_start();
-                    rb.focus = FocusedPane::BodyInsert;
+            FocusedPane::BodyNormal => {
+                let pending = rb.pending_key.take();
+                match (pending, code) {
+                    // Two-key sequences
+                    (Some('g'), KeyCode::Char('g')) => rb.body_goto_top(),
+                    (Some('d'), KeyCode::Char('d')) => rb.body_delete_line(),
+                    (Some('d'), KeyCode::Char('w')) => rb.body_delete_word(),
+                    // Unknown second key — cancel silently.
+                    (Some(_), _) => {}
+
+                    // Single-key commands
+                    (None, KeyCode::Esc) | (None, KeyCode::Tab) => {
+                        rb.focus = FocusedPane::ParamsNav;
+                    }
+                    (None, KeyCode::Char('h')) | (None, KeyCode::Left)  => rb.cursor_left(),
+                    (None, KeyCode::Char('l')) | (None, KeyCode::Right) => rb.cursor_right(),
+                    (None, KeyCode::Char('k')) | (None, KeyCode::Up)    => rb.cursor_up(),
+                    (None, KeyCode::Char('j')) | (None, KeyCode::Down)  => rb.cursor_down(),
+                    (None, KeyCode::Char('0')) => rb.cursor_line_start(),
+                    (None, KeyCode::Char('$')) => rb.cursor_line_end(),
+                    (None, KeyCode::Char('G')) => rb.body_goto_bottom(),
+                    // First key of a two-key sequence
+                    (None, KeyCode::Char('g')) => rb.pending_key = Some('g'),
+                    (None, KeyCode::Char('d')) => rb.pending_key = Some('d'),
+                    // Enter insert mode
+                    (None, KeyCode::Char('i')) => rb.focus = FocusedPane::BodyInsert,
+                    (None, KeyCode::Char('a')) => {
+                        rb.cursor_right();
+                        rb.focus = FocusedPane::BodyInsert;
+                    }
+                    (None, KeyCode::Char('I')) => {
+                        rb.cursor_line_start();
+                        rb.focus = FocusedPane::BodyInsert;
+                    }
+                    (None, KeyCode::Char('A')) => {
+                        rb.cursor_line_end();
+                        rb.focus = FocusedPane::BodyInsert;
+                    }
+                    _ => {}
                 }
-                KeyCode::Char('i') => rb.focus = FocusedPane::BodyInsert,
-                KeyCode::Char('a') => {
-                    rb.cursor_right();
-                    rb.focus = FocusedPane::BodyInsert;
-                }
-                KeyCode::Char('A') => {
-                    rb.cursor_line_end();
-                    rb.focus = FocusedPane::BodyInsert;
-                }
-                _ => {}
-            },
+            }
 
             // ── Bottom pane: insert mode ──────────────────────────────────────
             FocusedPane::BodyInsert => match code {

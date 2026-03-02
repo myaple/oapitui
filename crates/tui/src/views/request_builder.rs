@@ -44,6 +44,8 @@ pub struct RequestBuilderState {
     pub focus: FocusedPane,
     /// Char-position cursor used when the body pane is focused.
     pub cursor: usize,
+    /// First key of a pending two-key sequence (e.g. 'd' before 'dw'/'dd').
+    pub pending_key: Option<char>,
 }
 
 impl Default for RequestBuilderState {
@@ -56,6 +58,7 @@ impl Default for RequestBuilderState {
             selected: 0,
             focus: FocusedPane::ParamsNav,
             cursor: 0,
+            pending_key: None,
         }
     }
 }
@@ -113,6 +116,7 @@ impl RequestBuilderState {
             selected: 0,
             focus: FocusedPane::ParamsNav,
             cursor: 0,
+            pending_key: None,
         }
     }
 
@@ -283,6 +287,75 @@ impl RequestBuilderState {
             .position(|&c| c == '\n')
             .map(|i| self.cursor + i)
             .unwrap_or(chars.len());
+    }
+
+    pub fn body_goto_top(&mut self) {
+        self.cursor = 0;
+    }
+
+    pub fn body_goto_bottom(&mut self) {
+        let chars = self.body_chars();
+        self.cursor = chars
+            .iter()
+            .rposition(|&c| c == '\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+    }
+
+    pub fn body_delete_line(&mut self) {
+        if let Some(row) = self.rows.iter_mut().find(|r| r.kind == RowKind::Body) {
+            let chars: Vec<char> = row.value.chars().collect();
+            let line_start = chars[..self.cursor]
+                .iter()
+                .rposition(|&c| c == '\n')
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            // Position after the newline that ends this line, or end of string.
+            let line_end = chars[line_start..]
+                .iter()
+                .position(|&c| c == '\n')
+                .map(|i| line_start + i + 1)
+                .unwrap_or(chars.len());
+            // Last line: also consume the preceding newline so we don't leave
+            // a trailing blank line.
+            let (del_start, del_end) = if line_end == chars.len() && line_start > 0 {
+                (line_start - 1, chars.len())
+            } else {
+                (line_start, line_end)
+            };
+            row.value = chars[..del_start]
+                .iter()
+                .chain(chars[del_end..].iter())
+                .collect();
+            self.cursor = del_start.min(row.value.chars().count());
+        }
+    }
+
+    pub fn body_delete_word(&mut self) {
+        if let Some(row) = self.rows.iter_mut().find(|r| r.kind == RowKind::Body) {
+            let chars: Vec<char> = row.value.chars().collect();
+            let start = self.cursor;
+            if start >= chars.len() {
+                return;
+            }
+            let mut end = start;
+            if chars[end].is_whitespace() {
+                // On whitespace: eat whitespace up to (but not past) a newline.
+                while end < chars.len() && chars[end] == ' ' {
+                    end += 1;
+                }
+            } else {
+                // On a word char: eat word, then trailing spaces.
+                while end < chars.len() && !chars[end].is_whitespace() {
+                    end += 1;
+                }
+                while end < chars.len() && chars[end] == ' ' {
+                    end += 1;
+                }
+            }
+            row.value = chars[..start].iter().chain(chars[end..].iter()).collect();
+            // cursor stays at start
+        }
     }
 
     // ── Request assembly ──────────────────────────────────────────────────────
