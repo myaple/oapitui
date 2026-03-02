@@ -146,8 +146,25 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
                 _ => Text::raw(&body_row.value),
             };
 
+            // Compute which line the cursor is on, then derive a scroll offset
+            // that keeps the cursor inside the visible area.
+            let cursor_line = {
+                let chars: Vec<char> = body_row.value.chars().collect();
+                chars[..rb.cursor.min(chars.len())]
+                    .iter()
+                    .filter(|&&c| c == '\n')
+                    .count() as u16
+            };
+            let visible_lines = chunks[1].height.saturating_sub(2); // subtract borders
+            let scroll_top = if cursor_line >= visible_lines {
+                cursor_line - visible_lines + 1
+            } else {
+                0
+            };
+
             let body_para = Paragraph::new(body_content)
                 .block(body_block)
+                .scroll((scroll_top, 0))
                 .wrap(ratatui::widgets::Wrap { trim: false });
             f.render_widget(body_para, chunks[1]);
         }
