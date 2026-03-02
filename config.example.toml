@@ -1,0 +1,11 @@
+[[servers]]
+name        = "Petstore"
+url         = "https://petstore3.swagger.io/api/v3/openapi.json"
+description = "Swagger Petstore v3 example"
+
+# [[servers]]
+# name = "My API"
+# url  = "https://api.example.com/openapi.json"
+#
+# [servers.default_headers]
+# Authorization = "Bearer <token>"

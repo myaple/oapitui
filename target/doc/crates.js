@@ -1,0 +1,2 @@
+window.ALL_CRATES = ["equivalent","hashbrown","indexmap","itoa","memchr","openapiv3","proc_macro2","quote","serde","serde_core","serde_derive","serde_json","syn","unicode_ident","zmij"];
+//{"start":21,"fragment_lengths":[12,12,11,7,9,12,14,8,8,13,15,13,6,16,7]}

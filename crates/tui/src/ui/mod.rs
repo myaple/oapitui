@@ -1,0 +1,156 @@
+mod add_server;
+mod endpoint_list;
+mod request_builder;
+mod response_viewer;
+mod server_list;
+
+use crate::app::{App, Screen};
+use ratatui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Clear, Paragraph},
+    Frame,
+};
+
+pub fn render(f: &mut Frame, app: &App) {
+    let area = f.area();
+
+    // Split off bottom help bar
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(area);
+
+    match app.screen {
+        Screen::ServerList => server_list::render(f, app, chunks[0]),
+        Screen::AddServer => {
+            server_list::render(f, app, chunks[0]);
+            add_server::render(f, app, chunks[0]);
+        }
+        Screen::EndpointList => endpoint_list::render(f, app, chunks[0]),
+        Screen::RequestBuilder => request_builder::render(f, app, chunks[0]),
+        Screen::ResponseViewer => response_viewer::render(f, app, chunks[0]),
+    }
+
+    render_help_bar(f, app, chunks[1]);
+    render_error(f, app, area);
+}
+
+fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
+    let keys: &[(&str, &str)] = match app.screen {
+        Screen::ServerList => &[
+            ("↑/k↓/j", "navigate"),
+            ("Enter", "open"),
+            ("a", "add"),
+            ("d", "delete"),
+            ("r", "refresh"),
+            ("^C", "quit"),
+        ],
+        Screen::AddServer => &[("Tab", "switch field"), ("Enter", "confirm"), ("Esc", "cancel")],
+        Screen::EndpointList => &[
+            ("↑/k↓/j", "navigate"),
+            ("/", "filter"),
+            ("Enter", "open"),
+            ("Esc", "back"),
+        ],
+        Screen::RequestBuilder => &[
+            ("↑/k↓/j", "navigate rows"),
+            ("e", "edit"),
+            ("Esc", "stop edit / back"),
+            ("Enter", "send"),
+        ],
+        Screen::ResponseViewer => &[
+            ("↑/k↓/j", "scroll"),
+            ("h", "toggle headers"),
+            ("Esc", "back"),
+        ],
+    };
+
+    let spans: Vec<Span> = keys
+        .iter()
+        .flat_map(|(k, v)| {
+            vec![
+                Span::styled(format!(" {k}"), Style::default().fg(Color::Yellow)),
+                Span::styled(format!(" {v} "), Style::default().fg(Color::DarkGray)),
+            ]
+        })
+        .collect();
+
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
+fn render_error(f: &mut Frame, app: &App, area: Rect) {
+    if let Some(err) = &app.error {
+        let width = area.width.saturating_sub(4);
+        let height = 3u16;
+        let x = 2;
+        let y = area.height.saturating_sub(height + 2);
+        let popup_area = Rect::new(x, y, width, height);
+
+        f.render_widget(Clear, popup_area);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Red))
+            .title(" Error — press any key to dismiss ");
+        let msg = Paragraph::new(err.as_str())
+            .style(Style::default().fg(Color::Red))
+            .block(block);
+        f.render_widget(msg, popup_area);
+    }
+}
+
+/// Centered rectangle helper.
+pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
+
+/// Colour for HTTP method badge.
+pub fn method_color(method: &str) -> Color {
+    match method {
+        "GET" => Color::Green,
+        "POST" => Color::Yellow,
+        "PUT" => Color::Blue,
+        "DELETE" => Color::Red,
+        "PATCH" => Color::Cyan,
+        _ => Color::White,
+    }
+}
+
+pub fn status_color(status: u16) -> Color {
+    match status {
+        200..=299 => Color::Green,
+        300..=399 => Color::Yellow,
+        400..=499 => Color::Red,
+        500..=599 => Color::Magenta,
+        _ => Color::White,
+    }
+}
+
+pub fn title_style() -> Style {
+    Style::default()
+        .fg(Color::Cyan)
+        .add_modifier(Modifier::BOLD)
+}
+
+pub fn selected_style() -> Style {
+    Style::default()
+        .bg(Color::DarkGray)
+        .add_modifier(Modifier::BOLD)
+}
