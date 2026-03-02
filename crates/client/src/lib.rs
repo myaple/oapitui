@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use oaitui_config::TlsConfig;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -36,11 +37,8 @@ impl RequestDef {
     }
 }
 
-pub async fn execute(req: &RequestDef) -> Result<ResponseResult> {
-    let client = reqwest::Client::builder()
-        .user_agent("oaitui/0.1")
-        .timeout(Duration::from_secs(30))
-        .build()?;
+pub async fn execute(req: &RequestDef, tls: &TlsConfig) -> Result<ResponseResult> {
+    let client = build_client(tls)?;
 
     let url = req.resolved_url();
     let method = reqwest::Method::from_bytes(req.method.to_uppercase().as_bytes())
@@ -91,4 +89,26 @@ pub async fn execute(req: &RequestDef) -> Result<ResponseResult> {
         body_json,
         elapsed,
     })
+}
+
+fn build_client(tls: &TlsConfig) -> Result<reqwest::Client> {
+    let mut builder = reqwest::Client::builder()
+        .user_agent("oaitui/0.1")
+        .timeout(Duration::from_secs(30));
+
+    if let (Some(cert_path), Some(key_path)) = (&tls.client_cert, &tls.client_key) {
+        let mut pem =
+            std::fs::read(cert_path).with_context(|| format!("reading client cert {cert_path}"))?;
+        pem.extend(
+            std::fs::read(key_path).with_context(|| format!("reading client key {key_path}"))?,
+        );
+        builder = builder.identity(reqwest::Identity::from_pem(&pem)?);
+    }
+
+    if let Some(ca_path) = &tls.ca_cert {
+        let pem = std::fs::read(ca_path).with_context(|| format!("reading CA cert {ca_path}"))?;
+        builder = builder.add_root_certificate(reqwest::Certificate::from_pem(&pem)?);
+    }
+
+    Ok(builder.build()?)
 }

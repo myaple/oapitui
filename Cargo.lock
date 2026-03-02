@@ -676,6 +676,7 @@ name = "oaitui-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "oaitui-config",
  "reqwest",
  "serde",
  "serde_json",
@@ -699,6 +700,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "indexmap",
+ "oaitui-config",
  "openapiv3",
  "reqwest",
  "serde",

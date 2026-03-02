@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use oaitui_config::TlsConfig;
 use openapiv3::{
     OpenAPI, Operation, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type,
 };
@@ -37,10 +38,8 @@ pub struct ResolvedBody {
 }
 
 /// Fetch and parse an OpenAPI spec from a URL.
-pub async fn fetch_spec(url: &str) -> Result<OpenAPI> {
-    let client = reqwest::Client::builder()
-        .user_agent("oaitui/0.1")
-        .build()?;
+pub async fn fetch_spec(url: &str, tls: &TlsConfig) -> Result<OpenAPI> {
+    let client = build_client(tls)?;
     let text = client
         .get(url)
         .send()
@@ -54,6 +53,26 @@ pub async fn fetch_spec(url: &str) -> Result<OpenAPI> {
         serde_yaml::from_str(&text).with_context(|| format!("parsing OpenAPI spec from {url}"))
     })?;
     Ok(spec)
+}
+
+fn build_client(tls: &TlsConfig) -> Result<reqwest::Client> {
+    let mut builder = reqwest::Client::builder().user_agent("oaitui/0.1");
+
+    if let (Some(cert_path), Some(key_path)) = (&tls.client_cert, &tls.client_key) {
+        let mut pem =
+            std::fs::read(cert_path).with_context(|| format!("reading client cert {cert_path}"))?;
+        pem.extend(
+            std::fs::read(key_path).with_context(|| format!("reading client key {key_path}"))?,
+        );
+        builder = builder.identity(reqwest::Identity::from_pem(&pem)?);
+    }
+
+    if let Some(ca_path) = &tls.ca_cert {
+        let pem = std::fs::read(ca_path).with_context(|| format!("reading CA cert {ca_path}"))?;
+        builder = builder.add_root_certificate(reqwest::Certificate::from_pem(&pem)?);
+    }
+
+    Ok(builder.build()?)
 }
 
 /// Extract all endpoints from a parsed spec, resolving $refs inline.

@@ -99,14 +99,14 @@ impl App {
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     ) -> Result<()> {
         // Pre-fetch all specs in background
-        let to_fetch: Vec<(String, String)> = self
+        let to_fetch: Vec<(String, String, oaitui_config::TlsConfig)> = self
             .config
             .servers
             .iter()
-            .map(|s| (s.name.clone(), s.url.clone()))
+            .map(|s| (s.name.clone(), s.url.clone(), s.tls.clone()))
             .collect();
-        for (name, url) in to_fetch {
-            self.spawn_fetch(name, url);
+        for (name, url, tls) in to_fetch {
+            self.spawn_fetch(name, url, tls);
         }
 
         loop {
@@ -214,7 +214,7 @@ impl App {
             KeyCode::Char('r') => {
                 if n > 0 {
                     let s = &self.config.servers[self.server_list.selected];
-                    self.spawn_fetch(s.name.clone(), s.url.clone());
+                    self.spawn_fetch(s.name.clone(), s.url.clone(), s.tls.clone());
                 }
             }
             KeyCode::Enter => {
@@ -250,22 +250,31 @@ impl App {
             KeyCode::Tab => {
                 self.add_server.field = match self.add_server.field {
                     AddServerField::Name => AddServerField::Url,
-                    AddServerField::Url => AddServerField::Name,
+                    AddServerField::Url => AddServerField::ClientCert,
+                    AddServerField::ClientCert => AddServerField::ClientKey,
+                    AddServerField::ClientKey => AddServerField::CaCert,
+                    AddServerField::CaCert => AddServerField::Name,
                 };
             }
             KeyCode::Enter => {
                 let name = self.add_server.name.trim().to_string();
                 let url = self.add_server.url.trim().to_string();
                 if !name.is_empty() && !url.is_empty() {
+                    let tls = oaitui_config::TlsConfig {
+                        client_cert: non_empty(&self.add_server.client_cert),
+                        client_key: non_empty(&self.add_server.client_key),
+                        ca_cert: non_empty(&self.add_server.ca_cert),
+                    };
                     let entry = ServerEntry {
                         name: name.clone(),
                         url: url.clone(),
                         description: String::new(),
                         default_headers: Default::default(),
+                        tls: tls.clone(),
                     };
                     self.config.add_server(entry);
                     let _ = self.config.save(self.config_path.as_ref());
-                    self.spawn_fetch(name, url);
+                    self.spawn_fetch(name, url, tls);
                     self.screen = Screen::ServerList;
                 }
             }
@@ -278,6 +287,15 @@ impl App {
                     Url => {
                         self.add_server.url.pop();
                     }
+                    ClientCert => {
+                        self.add_server.client_cert.pop();
+                    }
+                    ClientKey => {
+                        self.add_server.client_key.pop();
+                    }
+                    CaCert => {
+                        self.add_server.ca_cert.pop();
+                    }
                 }
             }
             KeyCode::Char(c) => {
@@ -285,6 +303,9 @@ impl App {
                 match self.add_server.field {
                     Name => self.add_server.name.push(c),
                     Url => self.add_server.url.push(c),
+                    ClientCert => self.add_server.client_cert.push(c),
+                    ClientKey => self.add_server.client_key.push(c),
+                    CaCert => self.add_server.ca_cert.push(c),
                 }
             }
             _ => {}
@@ -360,9 +381,16 @@ impl App {
                 }
                 KeyCode::Enter => {
                     let req = rb.build_request();
+                    let tls = self
+                        .config
+                        .servers
+                        .iter()
+                        .find(|s| s.name == self.endpoint_list.server_name)
+                        .map(|s| s.tls.clone())
+                        .unwrap_or_default();
                     let tx = self.tx.clone();
                     tokio::spawn(async move {
-                        match oaitui_client::execute(&req).await {
+                        match oaitui_client::execute(&req, &tls).await {
                             Ok(resp) => {
                                 let _ = tx.send(BgMsg::ResponseReady(resp));
                             }
@@ -449,11 +477,11 @@ impl App {
         }
     }
 
-    fn spawn_fetch(&mut self, name: String, url: String) {
+    fn spawn_fetch(&mut self, name: String, url: String, tls: oaitui_config::TlsConfig) {
         self.spec_loading.insert(name.clone(), true);
         let tx = self.tx.clone();
         tokio::spawn(async move {
-            match fetch_spec(&url).await {
+            match fetch_spec(&url, &tls).await {
                 Ok(spec) => {
                     let _ = tx.send(BgMsg::SpecLoaded {
                         server_name: name,
@@ -468,5 +496,14 @@ impl App {
                 }
             }
         });
+    }
+}
+
+fn non_empty(s: &str) -> Option<String> {
+    let t = s.trim();
+    if t.is_empty() {
+        None
+    } else {
+        Some(t.to_string())
     }
 }

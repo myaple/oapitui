@@ -17,6 +17,30 @@ pub struct ServerEntry {
     pub description: String,
     #[serde(default)]
     pub default_headers: HashMap<String, String>,
+    #[serde(default)]
+    pub tls: TlsConfig,
+}
+
+/// Mutual-TLS and custom-CA configuration for a server.
+///
+/// ```toml
+/// [[servers]]
+/// name = "My API"
+/// url  = "https://api.example.com/openapi.json"
+///
+/// [servers.tls]
+/// client_cert = "/path/to/client.crt"   # PEM — client certificate
+/// client_key  = "/path/to/client.key"   # PEM — client private key
+/// ca_cert     = "/path/to/ca.crt"       # PEM — custom CA for server verification
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TlsConfig {
+    /// Path to the client certificate PEM (required for mTLS).
+    pub client_cert: Option<String>,
+    /// Path to the client private key PEM (required for mTLS).
+    pub client_key: Option<String>,
+    /// Path to a custom CA certificate PEM used to verify the server.
+    pub ca_cert: Option<String>,
 }
 
 impl Config {

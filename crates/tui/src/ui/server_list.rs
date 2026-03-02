@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
 };
 
@@ -105,14 +105,9 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
                 ]));
             }
             if let Some(info_desc) = &spec.info.description {
-                let desc = if info_desc.len() > 200 {
-                    format!("{}…", &info_desc[..200])
-                } else {
-                    info_desc.clone()
-                };
                 lines.push(Line::from(""));
                 lines.push(Line::from(Span::styled(
-                    desc,
+                    info_desc.clone(),
                     Style::default().fg(Color::DarkGray),
                 )));
             }
@@ -128,7 +123,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             )));
         }
 
-        let detail = Paragraph::new(lines);
+        let detail = Paragraph::new(lines).wrap(Wrap { trim: false });
         f.render_widget(detail, chunks[1]);
     }
 }

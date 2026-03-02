@@ -2,6 +2,9 @@
 pub struct AddServerState {
     pub name: String,
     pub url: String,
+    pub client_cert: String,
+    pub client_key: String,
+    pub ca_cert: String,
     pub field: AddServerField,
 }
 
@@ -10,4 +13,7 @@ pub enum AddServerField {
     #[default]
     Name,
     Url,
+    ClientCert,
+    ClientKey,
+    CaCert,
 }

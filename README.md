@@ -49,7 +49,22 @@ description = "Internal service"
 Authorization = "Bearer your-token-here"
 ```
 
-Servers are saved automatically when added through the TUI.
+**Mutual TLS (mTLS)** — add a `[servers.tls]` block per server:
+
+```toml
+[[servers]]
+name = "Secure API"
+url  = "https://api.internal/openapi.json"
+
+[servers.tls]
+client_cert = "/path/to/client.crt"   # PEM client certificate
+client_key  = "/path/to/client.key"   # PEM client private key
+ca_cert     = "/path/to/ca.crt"       # Custom CA for server verification (optional)
+```
+
+All three paths are optional — omit `ca_cert` to use system roots; omit the cert/key pair if the server doesn't require client auth. TLS settings are applied to both spec fetching and API requests.
+
+Servers are saved automatically when added through the TUI. mTLS paths entered in the Add Server form are persisted to the config file.
 
 ---
 
