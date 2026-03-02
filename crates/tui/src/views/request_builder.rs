@@ -339,22 +339,24 @@ impl RequestBuilderState {
                 return;
             }
             let mut end = start;
-            if chars[end].is_whitespace() {
-                // On whitespace: eat whitespace up to (but not past) a newline.
+            if chars[end].is_alphanumeric() {
+                // Eat alphanumeric run, then trailing spaces.
+                while end < chars.len() && chars[end].is_alphanumeric() {
+                    end += 1;
+                }
                 while end < chars.len() && chars[end] == ' ' {
                     end += 1;
                 }
-            } else {
-                // On a word char: eat word, then trailing spaces.
-                while end < chars.len() && !chars[end].is_whitespace() {
-                    end += 1;
-                }
+            } else if chars[end] == ' ' {
+                // On whitespace: eat spaces (but not newlines).
                 while end < chars.len() && chars[end] == ' ' {
                     end += 1;
                 }
             }
-            row.value = chars[..start].iter().chain(chars[end..].iter()).collect();
-            // cursor stays at start
+            // On punctuation: no-op.
+            if end > start {
+                row.value = chars[..start].iter().chain(chars[end..].iter()).collect();
+            }
         }
     }
 
