@@ -5,9 +5,9 @@ use crate::views::{
 };
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use oaitui_client::ResponseResult;
-use oaitui_config::{Config, ServerEntry};
-use oaitui_openapi::{extract_endpoints, fetch_spec, openapiv3::OpenAPI};
+use oapitui_client::ResponseResult;
+use oapitui_config::{Config, ServerEntry};
+use oapitui_openapi::{extract_endpoints, fetch_spec, openapiv3::OpenAPI};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{
     collections::HashMap,
@@ -99,7 +99,7 @@ impl App {
         terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     ) -> Result<()> {
         // Pre-fetch all specs in background
-        let to_fetch: Vec<(String, String, oaitui_config::TlsConfig)> = self
+        let to_fetch: Vec<(String, String, oapitui_config::TlsConfig)> = self
             .config
             .servers
             .iter()
@@ -260,7 +260,7 @@ impl App {
                 let name = self.add_server.name.trim().to_string();
                 let url = self.add_server.url.trim().to_string();
                 if !name.is_empty() && !url.is_empty() {
-                    let tls = oaitui_config::TlsConfig {
+                    let tls = oapitui_config::TlsConfig {
                         client_cert: non_empty(&self.add_server.client_cert),
                         client_key: non_empty(&self.add_server.client_key),
                         ca_cert: non_empty(&self.add_server.ca_cert),
@@ -390,7 +390,7 @@ impl App {
                         .unwrap_or_default();
                     let tx = self.tx.clone();
                     tokio::spawn(async move {
-                        match oaitui_client::execute(&req, &tls).await {
+                        match oapitui_client::execute(&req, &tls).await {
                             Ok(resp) => {
                                 let _ = tx.send(BgMsg::ResponseReady(resp));
                             }
@@ -477,7 +477,7 @@ impl App {
         }
     }
 
-    fn spawn_fetch(&mut self, name: String, url: String, tls: oaitui_config::TlsConfig) {
+    fn spawn_fetch(&mut self, name: String, url: String, tls: oapitui_config::TlsConfig) {
         self.spec_loading.insert(name.clone(), true);
         let tx = self.tx.clone();
         tokio::spawn(async move {

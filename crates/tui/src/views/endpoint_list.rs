@@ -1,4 +1,4 @@
-use oaitui_openapi::Endpoint;
+use oapitui_openapi::Endpoint;
 
 #[derive(Default)]
 pub struct EndpointListState {

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use oaitui_config::TlsConfig;
+use oapitui_config::TlsConfig;
 use openapiv3::{
     OpenAPI, Operation, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type,
 };
@@ -56,7 +56,7 @@ pub async fn fetch_spec(url: &str, tls: &TlsConfig) -> Result<OpenAPI> {
 }
 
 fn build_client(tls: &TlsConfig) -> Result<reqwest::Client> {
-    let mut builder = reqwest::Client::builder().user_agent("oaitui/0.1");
+    let mut builder = reqwest::Client::builder().user_agent("oapitui/0.1");
 
     if let (Some(cert_path), Some(key_path)) = (&tls.client_cert, &tls.client_key) {
         let mut pem =

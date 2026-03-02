@@ -1,4 +1,4 @@
-# oaitui
+# oapitui
 
 A terminal UI for exploring and testing OpenAPI services.
 
@@ -21,18 +21,18 @@ cargo install --path crates/tui
 **Docker**
 
 ```sh
-docker run -it --rm ghcr.io/your-org/oaitui
+docker run -it --rm ghcr.io/your-org/oapitui
 ```
 
 ---
 
 ## Configuration
 
-oaitui stores servers in a TOML config file.
+oapitui stores servers in a TOML config file.
 
-Default location: `~/.config/oaitui/config.toml`
+Default location: `~/.config/oapitui/config.toml`
 
-Custom location: `oaitui --config /path/to/config.toml`
+Custom location: `oapitui --config /path/to/config.toml`
 
 ```toml
 [[servers]]
@@ -71,7 +71,7 @@ Servers are saved automatically when added through the TUI. mTLS paths entered i
 ## Usage
 
 ```sh
-oaitui
+oapitui
 ```
 
 ### Server list

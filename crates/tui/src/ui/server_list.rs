@@ -94,7 +94,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         ];
 
         let spec_desc = if let Some(spec) = app.specs.get(&server.name) {
-            let ep_count = oaitui_openapi::extract_endpoints(spec).len();
+            let ep_count = oapitui_openapi::extract_endpoints(spec).len();
             header.push(Line::from(""));
             header.push(Line::from(vec![
                 Span::styled("Endpoints: ", bold),

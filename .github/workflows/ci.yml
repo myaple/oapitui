@@ -85,13 +85,13 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-musl-
 
       - name: Build release binary (static musl)
-        run: cargo build --release --bin oaitui --target x86_64-unknown-linux-musl
+        run: cargo build --release --bin oapitui --target x86_64-unknown-linux-musl
 
       - name: Rename binary
-        run: cp target/x86_64-unknown-linux-musl/release/oaitui oaitui-linux-x86_64
+        run: cp target/x86_64-unknown-linux-musl/release/oapitui oapitui-linux-x86_64
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: oaitui-linux-x86_64
+          files: oapitui-linux-x86_64
           generate_release_notes: true

@@ -1,4 +1,4 @@
-use oaitui_client::ResponseResult;
+use oapitui_client::ResponseResult;
 
 #[derive(Default)]
 pub struct ResponseViewerState {

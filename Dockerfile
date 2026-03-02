@@ -18,17 +18,17 @@ RUN for dir in crates/config crates/openapi crates/client; do \
     done && \
     mkdir -p crates/tui/src && echo "fn main() {}" > crates/tui/src/main.rs
 
-RUN cargo build --release --bin oaitui --target x86_64-unknown-linux-musl 2>/dev/null; true
+RUN cargo build --release --bin oapitui --target x86_64-unknown-linux-musl 2>/dev/null; true
 
 COPY crates crates
 RUN touch crates/*/src/*.rs && \
-    cargo build --release --bin oaitui --target x86_64-unknown-linux-musl
+    cargo build --release --bin oapitui --target x86_64-unknown-linux-musl
 
 # ── Runtime stage (static binary — no OS needed) ───────────────────────────────
 FROM scratch
 
 # CA certificates for HTTPS spec fetching
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/oaitui /oaitui
+COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/oapitui /oapitui
 
-ENTRYPOINT ["/oaitui"]
+ENTRYPOINT ["/oapitui"]

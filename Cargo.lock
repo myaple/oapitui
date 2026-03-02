@@ -672,11 +672,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "oaitui-client"
+name = "oapitui-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "oaitui-config",
+ "oapitui-config",
  "reqwest",
  "serde",
  "serde_json",
@@ -684,7 +684,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "oaitui-config"
+name = "oapitui-config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -695,12 +695,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "oaitui-openapi"
+name = "oapitui-openapi"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "indexmap",
- "oaitui-config",
+ "oapitui-config",
  "openapiv3",
  "reqwest",
  "serde",
@@ -710,14 +710,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "oaitui-tui"
+name = "oapitui-tui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "crossterm",
- "oaitui-client",
- "oaitui-config",
- "oaitui-openapi",
+ "oapitui-client",
+ "oapitui-config",
+ "oapitui-openapi",
  "pulldown-cmark",
  "ratatui",
  "serde",

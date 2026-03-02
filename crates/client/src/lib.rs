@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use oaitui_config::TlsConfig;
+use oapitui_config::TlsConfig;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -93,7 +93,7 @@ pub async fn execute(req: &RequestDef, tls: &TlsConfig) -> Result<ResponseResult
 
 fn build_client(tls: &TlsConfig) -> Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
-        .user_agent("oaitui/0.1")
+        .user_agent("oapitui/0.1")
         .timeout(Duration::from_secs(30));
 
     if let (Some(cert_path), Some(key_path)) = (&tls.client_cert, &tls.client_key) {

@@ -1,16 +1,16 @@
 [package]
-name    = "oaitui-tui"
+name    = "oapitui-tui"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "oaitui"
+name = "oapitui"
 path = "src/main.rs"
 
 [dependencies]
-oaitui-config = { path = "../config" }
-oaitui-openapi = { path = "../openapi" }
-oaitui-client  = { path = "../client" }
+oapitui-config = { path = "../config" }
+oapitui-openapi = { path = "../openapi" }
+oapitui-client  = { path = "../client" }
 
 anyhow     = { workspace = true }
 serde      = { workspace = true }

@@ -1,5 +1,5 @@
-use oaitui_client::RequestDef;
-use oaitui_openapi::Endpoint;
+use oapitui_client::RequestDef;
+use oapitui_openapi::Endpoint;
 use serde_json::Value;
 use std::collections::HashMap;
 
