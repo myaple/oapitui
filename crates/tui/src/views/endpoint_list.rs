@@ -1,5 +1,6 @@
 use oaitui_openapi::Endpoint;
 
+#[derive(Default)]
 pub struct EndpointListState {
     pub endpoints: Vec<Endpoint>,
     pub server_name: String,
@@ -7,19 +8,6 @@ pub struct EndpointListState {
     pub selected: usize,
     pub filter: String,
     pub filter_active: bool,
-}
-
-impl Default for EndpointListState {
-    fn default() -> Self {
-        Self {
-            endpoints: vec![],
-            server_name: String::new(),
-            server_base: String::new(),
-            selected: 0,
-            filter: String::new(),
-            filter_active: false,
-        }
-    }
 }
 
 impl EndpointListState {

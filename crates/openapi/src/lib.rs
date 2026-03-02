@@ -121,7 +121,7 @@ fn resolve_param(p: &ReferenceOr<Parameter>, spec: &OpenAPI) -> Option<ResolvedP
         ReferenceOr::Item(i) => i,
         ReferenceOr::Reference { reference } => {
             // Simple $ref resolution from components/parameters
-            let name = reference.split('/').last()?;
+            let name = reference.split('/').next_back()?;
             spec.components
                 .as_ref()?
                 .parameters
@@ -200,7 +200,7 @@ fn collect_body(op: &Operation, spec: &OpenAPI) -> Option<ResolvedBody> {
     let body: &RequestBody = match body_ref {
         ReferenceOr::Item(b) => b,
         ReferenceOr::Reference { reference } => {
-            let name = reference.split('/').last()?;
+            let name = reference.split('/').next_back()?;
             match spec.components.as_ref()?.request_bodies.get(name)? {
                 ReferenceOr::Item(b) => b,
                 _ => return None,
@@ -360,7 +360,7 @@ pub fn schema_type_label(schema: &Schema) -> String {
 }
 
 pub fn resolve_schema_ref(reference: &str, spec: &OpenAPI) -> Option<Schema> {
-    let name = reference.split('/').last()?;
+    let name = reference.split('/').next_back()?;
     spec.components
         .as_ref()?
         .schemas

@@ -71,7 +71,7 @@ pub struct App {
 
 impl App {
     pub fn new(config_path: Option<PathBuf>) -> Result<Self> {
-        let path_ref = config_path.as_ref().or_else(|| None);
+        let path_ref = config_path.as_ref().or(None);
         let config = Config::load(path_ref)?;
         let (tx, rx) = mpsc::unbounded_channel();
 

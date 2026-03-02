@@ -58,11 +58,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_body(f: &mut Frame, rv: &crate::views::response_viewer::ResponseViewerState, area: Rect) {
     // Simple JSON syntax coloring: lines starting with keys get cyan keys
-    let lines: Vec<Line> = rv
-        .body
-        .lines()
-        .map(|line| colorize_json_line(line))
-        .collect();
+    let lines: Vec<Line> = rv.body.lines().map(colorize_json_line).collect();
 
     let para = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
