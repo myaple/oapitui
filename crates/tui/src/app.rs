@@ -329,36 +329,83 @@ impl App {
     async fn handle_request_builder(
         &mut self,
         code: KeyCode,
-        modifiers: KeyModifiers,
+        _modifiers: KeyModifiers,
     ) -> Result<()> {
+        use crate::views::request_builder::FocusedPane;
         let rb = &mut self.request_builder;
-        match code {
-            KeyCode::Esc if rb.editing => rb.editing = false,
-            KeyCode::Esc => self.screen = Screen::EndpointList,
-            KeyCode::Char('j') | KeyCode::Down if !rb.editing => rb.next_row(),
-            KeyCode::Char('k') | KeyCode::Up if !rb.editing => rb.prev_row(),
-            KeyCode::Char('e') if !rb.editing => rb.editing = true,
-            KeyCode::Enter if !rb.editing => {
-                // Send request
-                let req = rb.build_request();
-                let tx = self.tx.clone();
-                tokio::spawn(async move {
-                    match oaitui_client::execute(&req).await {
-                        Ok(resp) => { let _ = tx.send(BgMsg::ResponseReady(resp)); }
-                        Err(e) => { let _ = tx.send(BgMsg::ResponseError(e.to_string())); }
-                    }
-                });
-            }
-            // Editing a field
-            KeyCode::Backspace if rb.editing => rb.edit_backspace(),
-            KeyCode::Char(c) if rb.editing => {
-                let _ = modifiers; // keep unused warning away
-                rb.edit_char(c);
-            }
-            KeyCode::Enter if rb.editing => {
-                rb.edit_char('\n');
-            }
-            _ => {}
+
+        match rb.focus {
+            // ── Top pane: navigating param rows ──────────────────────────────
+            FocusedPane::ParamsNav => match code {
+                KeyCode::Esc => self.screen = Screen::EndpointList,
+                KeyCode::Char('j') | KeyCode::Down => rb.next_row(),
+                KeyCode::Char('k') | KeyCode::Up => rb.prev_row(),
+                KeyCode::Char('e') => {
+                    // Focus the param value for editing; place cursor at end.
+                    rb.cursor = rb
+                        .rows
+                        .get(rb.selected)
+                        .map(|r| r.value.chars().count())
+                        .unwrap_or(0);
+                    rb.focus = FocusedPane::ParamsEdit;
+                }
+                KeyCode::Tab if rb.has_body() => {
+                    rb.focus = FocusedPane::BodyNormal;
+                }
+                KeyCode::Enter => {
+                    let req = rb.build_request();
+                    let tx = self.tx.clone();
+                    tokio::spawn(async move {
+                        match oaitui_client::execute(&req).await {
+                            Ok(resp) => { let _ = tx.send(BgMsg::ResponseReady(resp)); }
+                            Err(e) => { let _ = tx.send(BgMsg::ResponseError(e.to_string())); }
+                        }
+                    });
+                }
+                _ => {}
+            },
+
+            // ── Top pane: editing a param value inline ────────────────────────
+            FocusedPane::ParamsEdit => match code {
+                KeyCode::Esc => rb.focus = FocusedPane::ParamsNav,
+                KeyCode::Backspace => rb.edit_backspace(),
+                KeyCode::Char(c) => rb.edit_char(c),
+                _ => {}
+            },
+
+            // ── Bottom pane: vim normal mode ──────────────────────────────────
+            FocusedPane::BodyNormal => match code {
+                KeyCode::Esc | KeyCode::Tab => rb.focus = FocusedPane::ParamsNav,
+                KeyCode::Char('h') | KeyCode::Left  => rb.cursor_left(),
+                KeyCode::Char('l') | KeyCode::Right => rb.cursor_right(),
+                KeyCode::Char('k') | KeyCode::Up    => rb.cursor_up(),
+                KeyCode::Char('j') | KeyCode::Down  => rb.cursor_down(),
+                KeyCode::Char('0') => rb.cursor_line_start(),
+                KeyCode::Char('$') => rb.cursor_line_end(),
+                KeyCode::Char('I') => {
+                    rb.cursor_line_start();
+                    rb.focus = FocusedPane::BodyInsert;
+                }
+                KeyCode::Char('i') => rb.focus = FocusedPane::BodyInsert,
+                KeyCode::Char('a') => {
+                    rb.cursor_right();
+                    rb.focus = FocusedPane::BodyInsert;
+                }
+                KeyCode::Char('A') => {
+                    rb.cursor_line_end();
+                    rb.focus = FocusedPane::BodyInsert;
+                }
+                _ => {}
+            },
+
+            // ── Bottom pane: insert mode ──────────────────────────────────────
+            FocusedPane::BodyInsert => match code {
+                KeyCode::Esc => rb.focus = FocusedPane::BodyNormal,
+                KeyCode::Backspace => rb.edit_body_backspace(),
+                KeyCode::Enter => rb.edit_body_char('\n'),
+                KeyCode::Char(c) => rb.edit_body_char(c),
+                _ => {}
+            },
         }
         Ok(())
     }

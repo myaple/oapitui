@@ -11,6 +11,20 @@ pub enum RowKind {
     Body,
 }
 
+/// Which pane has focus and what mode it is in.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum FocusedPane {
+    /// Top pane: navigating param rows with j/k.
+    #[default]
+    ParamsNav,
+    /// Top pane: editing a param value inline.
+    ParamsEdit,
+    /// Bottom pane: vim normal mode (cursor moves, no typing).
+    BodyNormal,
+    /// Bottom pane: insert mode (typing edits the body).
+    BodyInsert,
+}
+
 #[derive(Debug, Clone)]
 pub struct FieldRow {
     pub kind: RowKind,
@@ -25,9 +39,11 @@ pub struct RequestBuilderState {
     pub base_url: String,
     pub path_template: String,
     pub rows: Vec<FieldRow>,
+    /// Index within the *param* rows only (never points at the body row).
     pub selected: usize,
-    pub editing: bool,
-    pub cursor: usize, // char position within value string
+    pub focus: FocusedPane,
+    /// Char-position cursor used when the body pane is focused.
+    pub cursor: usize,
 }
 
 impl Default for RequestBuilderState {
@@ -38,7 +54,7 @@ impl Default for RequestBuilderState {
             path_template: String::new(),
             rows: vec![],
             selected: 0,
-            editing: false,
+            focus: FocusedPane::ParamsNav,
             cursor: 0,
         }
     }
@@ -77,6 +93,7 @@ impl RequestBuilderState {
             });
         }
 
+        // Body is always appended last so param indices stay contiguous.
         if let Some(body) = &ep.request_body {
             let pretty = serde_json::to_string_pretty(&body.example).unwrap_or_default();
             rows.push(FieldRow {
@@ -88,36 +105,45 @@ impl RequestBuilderState {
             });
         }
 
-        let cursor = rows.first().map(|r| r.value.len()).unwrap_or(0);
-
         Self {
             method: ep.method.clone(),
             base_url,
             path_template: ep.path.clone(),
             rows,
             selected: 0,
-            editing: false,
-            cursor,
+            focus: FocusedPane::ParamsNav,
+            cursor: 0,
         }
     }
 
+    /// Number of non-body rows shown in the params table.
+    pub fn param_count(&self) -> usize {
+        self.rows.iter().filter(|r| r.kind != RowKind::Body).count()
+    }
+
+    pub fn has_body(&self) -> bool {
+        self.rows.iter().any(|r| r.kind == RowKind::Body)
+    }
+
+    // ── Params-pane navigation ────────────────────────────────────────────────
+
     pub fn next_row(&mut self) {
-        if !self.rows.is_empty() {
-            self.selected = (self.selected + 1).min(self.rows.len() - 1);
-            self.cursor = self.rows[self.selected].value.len();
+        let n = self.param_count();
+        if n > 0 {
+            self.selected = (self.selected + 1).min(n - 1);
         }
     }
 
     pub fn prev_row(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;
-            self.cursor = self.rows[self.selected].value.len();
         }
     }
 
+    // ── Params-pane inline editing ────────────────────────────────────────────
+
     pub fn edit_char(&mut self, c: char) {
         if let Some(row) = self.rows.get_mut(self.selected) {
-            // Insert at cursor position (byte-safe for ASCII; good enough for URLs/JSON)
             let byte_idx = row
                 .value
                 .char_indices()
@@ -143,6 +169,123 @@ impl RequestBuilderState {
             }
         }
     }
+
+    // ── Body-pane editing ─────────────────────────────────────────────────────
+
+    pub fn edit_body_char(&mut self, c: char) {
+        if let Some(row) = self.rows.iter_mut().find(|r| r.kind == RowKind::Body) {
+            let byte_idx = row
+                .value
+                .char_indices()
+                .nth(self.cursor)
+                .map(|(i, _)| i)
+                .unwrap_or(row.value.len());
+            row.value.insert(byte_idx, c);
+            self.cursor += 1;
+        }
+    }
+
+    pub fn edit_body_backspace(&mut self) {
+        if let Some(row) = self.rows.iter_mut().find(|r| r.kind == RowKind::Body) {
+            if self.cursor > 0 {
+                let byte_idx = row
+                    .value
+                    .char_indices()
+                    .nth(self.cursor - 1)
+                    .map(|(i, _)| i)
+                    .unwrap_or(row.value.len());
+                row.value.remove(byte_idx);
+                self.cursor -= 1;
+            }
+        }
+    }
+
+    // ── Body-pane vim cursor motions ──────────────────────────────────────────
+
+    fn body_chars(&self) -> Vec<char> {
+        self.rows
+            .iter()
+            .find(|r| r.kind == RowKind::Body)
+            .map(|r| r.value.chars().collect())
+            .unwrap_or_default()
+    }
+
+    pub fn cursor_left(&mut self) {
+        if self.cursor > 0 {
+            self.cursor -= 1;
+        }
+    }
+
+    pub fn cursor_right(&mut self) {
+        let len = self.body_chars().len();
+        if self.cursor < len {
+            self.cursor += 1;
+        }
+    }
+
+    pub fn cursor_up(&mut self) {
+        let chars = self.body_chars();
+        let line_start = chars[..self.cursor]
+            .iter()
+            .rposition(|&c| c == '\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        if line_start == 0 {
+            return;
+        }
+        let col = self.cursor - line_start;
+        let prev_line_end = line_start - 1;
+        let prev_line_start = chars[..prev_line_end]
+            .iter()
+            .rposition(|&c| c == '\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let prev_line_len = prev_line_end - prev_line_start;
+        self.cursor = prev_line_start + col.min(prev_line_len);
+    }
+
+    pub fn cursor_down(&mut self) {
+        let chars = self.body_chars();
+        let next_newline = chars[self.cursor..]
+            .iter()
+            .position(|&c| c == '\n')
+            .map(|i| self.cursor + i);
+        if let Some(nl) = next_newline {
+            let line_start = chars[..self.cursor]
+                .iter()
+                .rposition(|&c| c == '\n')
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            let col = self.cursor - line_start;
+            let next_start = nl + 1;
+            let next_end = chars[next_start..]
+                .iter()
+                .position(|&c| c == '\n')
+                .map(|i| next_start + i)
+                .unwrap_or(chars.len());
+            self.cursor = next_start + col.min(next_end - next_start);
+        }
+    }
+
+    pub fn cursor_line_start(&mut self) {
+        let chars = self.body_chars();
+        self.cursor = chars[..self.cursor]
+            .iter()
+            .rposition(|&c| c == '\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+    }
+
+    pub fn cursor_line_end(&mut self) {
+        let chars = self.body_chars();
+        self.cursor = chars[self.cursor..]
+            .iter()
+            .position(|&c| c == '\n')
+            .map(|i| self.cursor + i)
+            .unwrap_or(chars.len());
+    }
+
+    // ── Request assembly ──────────────────────────────────────────────────────
 
     pub fn build_request(&self) -> RequestDef {
         let mut path_params = HashMap::new();

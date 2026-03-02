@@ -47,9 +47,10 @@ pub async fn fetch_spec(url: &str) -> Result<OpenAPI> {
         .text()
         .await?;
 
-    // Try JSON first, then YAML-as-JSON fallback
-    let spec: OpenAPI = serde_json::from_str(&text)
-        .with_context(|| format!("parsing OpenAPI JSON from {url}"))?;
+    // Try JSON first, then YAML fallback
+    let spec: OpenAPI = serde_json::from_str(&text).or_else(|_| {
+        serde_yaml::from_str(&text).with_context(|| format!("parsing OpenAPI spec from {url}"))
+    })?;
     Ok(spec)
 }
 

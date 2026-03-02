@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::views::request_builder::RowKind;
+use crate::views::request_builder::{FocusedPane, RowKind};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -11,25 +11,14 @@ use ratatui::{
 pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let rb = &app.request_builder;
 
-    let title = format!(
-        " {} {} ",
-        rb.method, rb.path_template
-    );
-
+    let title = format!(" {} {} ", rb.method, rb.path_template);
     let outer = Block::default()
         .borders(Borders::ALL)
         .title(Span::styled(title, super::title_style()));
-
     let inner = outer.inner(area);
     f.render_widget(outer, area);
 
-    // Split: table top, body editor bottom (if there's a body row)
-    let has_body = rb.rows.iter().any(|r| r.kind == RowKind::Body);
-    let body_selected = rb
-        .rows
-        .get(rb.selected)
-        .map(|r| r.kind == RowKind::Body)
-        .unwrap_or(false);
+    let has_body = rb.has_body();
 
     let chunks = if has_body {
         Layout::default()
@@ -43,20 +32,20 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             .split(inner)
     };
 
-    let table_area = chunks[0];
+    // ── Params table (top pane) ───────────────────────────────────────────────
 
-    // Build table rows (non-body params)
-    let non_body: Vec<_> = rb
+    let params_focused = matches!(rb.focus, FocusedPane::ParamsNav | FocusedPane::ParamsEdit);
+    let editing_params = rb.focus == FocusedPane::ParamsEdit;
+
+    // Collect only non-body rows; their indices within `rows` are contiguous
+    // from 0 because body is always appended last.
+    let param_rows: Vec<Row> = rb
         .rows
         .iter()
         .enumerate()
         .filter(|(_, r)| r.kind != RowKind::Body)
-        .collect();
-
-    let table_rows: Vec<Row> = non_body
-        .iter()
         .map(|(i, row)| {
-            let is_selected = *i == rb.selected;
+            let is_selected = params_focused && i == rb.selected;
             let kind_label = match row.kind {
                 RowKind::PathParam => "path",
                 RowKind::QueryParam => "query",
@@ -64,8 +53,8 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
                 RowKind::Body => "body",
             };
             let req_marker = if row.required { "*" } else { " " };
-            let value_display = if is_selected && rb.editing {
-                format!("{}_", row.value) // show cursor underscore
+            let value_display = if is_selected && editing_params {
+                format!("{}_", row.value)
             } else {
                 row.value.clone()
             };
@@ -76,10 +65,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             };
             Row::new(vec![
                 Cell::from(Span::styled(req_marker, Style::default().fg(Color::Red))),
-                Cell::from(Span::styled(
-                    kind_label,
-                    Style::default().fg(Color::DarkGray),
-                )),
+                Cell::from(Span::styled(kind_label, Style::default().fg(Color::DarkGray))),
                 Cell::from(Span::styled(row.name.clone(), Style::default().fg(Color::Cyan))),
                 Cell::from(Span::styled(
                     row.type_label.clone(),
@@ -108,44 +94,65 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     ];
 
     let mut table_state = TableState::default();
-    // Map selected index to non-body list index
-    let selected_in_table = non_body.iter().position(|(i, _)| *i == rb.selected);
-    table_state.select(selected_in_table);
+    if params_focused {
+        table_state.select(Some(rb.selected));
+    }
 
-    let table = Table::new(table_rows, widths)
+    let params_block = Block::default()
+        .borders(Borders::BOTTOM)
+        .border_style(if params_focused {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default()
+        });
+
+    let table = Table::new(param_rows, widths)
         .header(header)
-        .block(Block::default().borders(Borders::BOTTOM))
+        .block(params_block)
         .row_highlight_style(super::selected_style());
 
-    f.render_stateful_widget(table, table_area, &mut table_state);
+    f.render_stateful_widget(table, chunks[0], &mut table_state);
 
-    // Body editor panel
+    // ── Body editor (bottom pane) ─────────────────────────────────────────────
+
     if has_body && chunks.len() > 1 {
         if let Some(body_row) = rb.rows.iter().find(|r| r.kind == RowKind::Body) {
+            let (border_style, title_hint) = match rb.focus {
+                FocusedPane::ParamsNav | FocusedPane::ParamsEdit => (
+                    Style::default(),
+                    format!(" Body ({}) — Tab=focus ", body_row.type_label),
+                ),
+                FocusedPane::BodyNormal => (
+                    Style::default().fg(Color::Yellow),
+                    format!(
+                        " Body ({}) — NORMAL  hjkl=move  0/$=line  i/a=insert  Tab/Esc=params ",
+                        body_row.type_label
+                    ),
+                ),
+                FocusedPane::BodyInsert => (
+                    Style::default().fg(Color::Green),
+                    format!(" Body ({}) — INSERT  Esc=normal ", body_row.type_label),
+                ),
+            };
+
             let body_block = Block::default()
                 .borders(Borders::ALL)
-                .border_style(if body_selected {
-                    Style::default().fg(Color::Yellow)
-                } else {
-                    Style::default()
-                })
-                .title(format!(
-                    " Body ({}) — e=edit  Backspace=del  Esc=done  Enter=newline ",
-                    body_row.type_label
-                ));
+                .border_style(border_style)
+                .title(title_hint);
 
-            let value_with_cursor = if body_selected && rb.editing {
-                // Show cursor at actual cursor position
-                let mut s = body_row.value.clone();
-                let byte_idx = s
-                    .char_indices()
-                    .nth(rb.cursor)
-                    .map(|(i, _)| i)
-                    .unwrap_or(s.len());
-                s.insert(byte_idx, '█');
-                s
-            } else {
-                body_row.value.clone()
+            let value_with_cursor = match rb.focus {
+                FocusedPane::BodyNormal | FocusedPane::BodyInsert => {
+                    let cursor_char = if rb.focus == FocusedPane::BodyInsert { '│' } else { '█' };
+                    let mut s = body_row.value.clone();
+                    let byte_idx = s
+                        .char_indices()
+                        .nth(rb.cursor)
+                        .map(|(i, _)| i)
+                        .unwrap_or(s.len());
+                    s.insert(byte_idx, cursor_char);
+                    s
+                }
+                _ => body_row.value.clone(),
             };
 
             let body_para = Paragraph::new(value_with_cursor)
@@ -155,14 +162,16 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         }
     }
 
-    // If no rows, show hint
+    // ── Empty state hint ──────────────────────────────────────────────────────
+
     if rb.rows.is_empty() {
         let hint = Paragraph::new("No parameters. Press Enter to send.")
             .style(Style::default().fg(Color::DarkGray));
         f.render_widget(hint, inner);
     }
 
-    // Method badge overlay in top-right
+    // ── Method badge (top-right overlay) ──────────────────────────────────────
+
     let method_area = Rect::new(
         area.x + area.width.saturating_sub(12),
         area.y,
