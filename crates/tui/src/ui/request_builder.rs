@@ -3,7 +3,7 @@ use crate::views::request_builder::{FocusedPane, RowKind};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::Span,
+    text::{Line, Span, Text},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
     Frame,
 };
@@ -140,22 +140,13 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
                 .border_style(border_style)
                 .title(title_hint);
 
-            let value_with_cursor = match rb.focus {
-                FocusedPane::BodyNormal | FocusedPane::BodyInsert => {
-                    let cursor_char = if rb.focus == FocusedPane::BodyInsert { '│' } else { '█' };
-                    let mut s = body_row.value.clone();
-                    let byte_idx = s
-                        .char_indices()
-                        .nth(rb.cursor)
-                        .map(|(i, _)| i)
-                        .unwrap_or(s.len());
-                    s.insert(byte_idx, cursor_char);
-                    s
-                }
-                _ => body_row.value.clone(),
+            let body_content: Text = match rb.focus {
+                FocusedPane::BodyNormal => body_with_block_cursor(&body_row.value, rb.cursor),
+                FocusedPane::BodyInsert => body_with_bar_cursor(&body_row.value, rb.cursor),
+                _ => Text::raw(&body_row.value),
             };
 
-            let body_para = Paragraph::new(value_with_cursor)
+            let body_para = Paragraph::new(body_content)
                 .block(body_block)
                 .wrap(ratatui::widgets::Wrap { trim: false });
             f.render_widget(body_para, chunks[1]);
@@ -184,4 +175,72 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             .add_modifier(Modifier::BOLD),
     );
     f.render_widget(badge, method_area);
+}
+
+/// Render body text with the character at `cursor` highlighted (block cursor,
+/// normal mode). No extra character is inserted into the string.
+fn body_with_block_cursor(value: &str, cursor: usize) -> Text<'static> {
+    let block_style = Style::default().fg(Color::Black).bg(Color::White);
+    let lines: Vec<Line> = value
+        .split('\n')
+        .scan(0usize, |pos, line_str| {
+            let line_chars: Vec<char> = line_str.chars().collect();
+            let line_start = *pos;
+            let line_end = line_start + line_chars.len();
+            // Advance past this line + its newline
+            *pos = line_end + 1;
+
+            let rendered = if cursor >= line_start && cursor <= line_end {
+                let col = cursor - line_start;
+                let before: String = line_chars[..col].iter().collect();
+                let (at, after): (String, String) = if col < line_chars.len() {
+                    (
+                        line_chars[col].to_string(),
+                        line_chars[col + 1..].iter().collect(),
+                    )
+                } else {
+                    // Cursor is past end of line — show a space block
+                    (" ".to_string(), String::new())
+                };
+                Line::from(vec![
+                    Span::raw(before),
+                    Span::styled(at, block_style),
+                    Span::raw(after),
+                ])
+            } else {
+                Line::raw(line_str.to_owned())
+            };
+            Some(rendered)
+        })
+        .collect();
+    Text::from(lines)
+}
+
+/// Render body text with a `│` bar inserted at `cursor` (insert mode).
+fn body_with_bar_cursor(value: &str, cursor: usize) -> Text<'static> {
+    let bar_style = Style::default().fg(Color::Green);
+    let lines: Vec<Line> = value
+        .split('\n')
+        .scan(0usize, |pos, line_str| {
+            let line_chars: Vec<char> = line_str.chars().collect();
+            let line_start = *pos;
+            let line_end = line_start + line_chars.len();
+            *pos = line_end + 1;
+
+            let rendered = if cursor >= line_start && cursor <= line_end {
+                let col = cursor - line_start;
+                let before: String = line_chars[..col].iter().collect();
+                let after: String = line_chars[col..].iter().collect();
+                Line::from(vec![
+                    Span::raw(before),
+                    Span::styled("│", bar_style),
+                    Span::raw(after),
+                ])
+            } else {
+                Line::raw(line_str.to_owned())
+            };
+            Some(rendered)
+        })
+        .collect();
+    Text::from(lines)
 }

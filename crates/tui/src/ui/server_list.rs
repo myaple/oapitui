@@ -10,7 +10,7 @@ use ratatui::{
 pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(Span::styled(" oaitui — Servers ", super::title_style()));
+        .title(Span::styled(" oapitui — Servers ", super::title_style()));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
