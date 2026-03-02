@@ -70,6 +70,15 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
 
     // --- Detail panel ---
     if let Some(server) = app.config.servers.get(app.server_list.selected) {
+        // "URL:  " prefix is 6 chars; truncate so the URL never wraps mid-string.
+        let url_budget = chunks[1].width.saturating_sub(6) as usize;
+        let url_chars: Vec<char> = server.url.chars().collect();
+        let url_display = if url_chars.len() > url_budget {
+            format!("{}…", url_chars[..url_budget.saturating_sub(1)].iter().collect::<String>())
+        } else {
+            server.url.clone()
+        };
+
         let mut lines: Vec<Line> = vec![
             Line::from(vec![
                 Span::styled("Name: ", Style::default().add_modifier(Modifier::BOLD)),
@@ -77,7 +86,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             ]),
             Line::from(vec![
                 Span::styled("URL:  ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::styled(&server.url, Style::default().fg(Color::Blue)),
+                Span::styled(url_display, Style::default().fg(Color::Blue)),
             ]),
         ];
 
