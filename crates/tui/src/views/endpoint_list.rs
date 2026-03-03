@@ -8,6 +8,8 @@ pub struct EndpointListState {
     pub selected: usize,
     pub filter: String,
     pub filter_active: bool,
+    pub detail_scroll: u16,
+    pub detail_focused: bool,
 }
 
 impl EndpointListState {
@@ -19,6 +21,8 @@ impl EndpointListState {
             selected: 0,
             filter: String::new(),
             filter_active: false,
+            detail_scroll: 0,
+            detail_focused: false,
         }
     }
 
@@ -45,12 +49,14 @@ impl EndpointListState {
         let n = self.filtered().len();
         if n > 0 {
             self.selected = (self.selected + 1).min(n - 1);
+            self.detail_scroll = 0;
         }
     }
 
     pub fn prev(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;
+            self.detail_scroll = 0;
         }
     }
 }

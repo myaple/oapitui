@@ -13,6 +13,7 @@ pub struct Endpoint {
     pub method: String,
     pub path: String,
     pub summary: String,
+    pub description: String,
     pub operation_id: Option<String>,
     pub tags: Vec<String>,
     pub parameters: Vec<ResolvedParam>,
@@ -110,11 +111,8 @@ pub fn extract_endpoints(spec: &OpenAPI) -> Vec<Endpoint> {
                 endpoints.push(Endpoint {
                     method: method.to_string(),
                     path: path.clone(),
-                    summary: op
-                        .summary
-                        .clone()
-                        .or_else(|| op.description.clone())
-                        .unwrap_or_default(),
+                    summary: op.summary.clone().unwrap_or_default(),
+                    description: op.description.clone().unwrap_or_default(),
                     operation_id: op.operation_id.clone(),
                     tags: op.tags.clone(),
                     parameters,
