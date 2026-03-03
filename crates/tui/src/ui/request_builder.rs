@@ -1,8 +1,9 @@
 use crate::app::App;
+use crate::theme::Theme;
 use crate::views::request_builder::{FocusedPane, RowKind};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
     Frame,
@@ -14,7 +15,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let title = format!(" {} {} ", rb.method, rb.path_template);
     let outer = Block::default()
         .borders(Borders::ALL)
-        .title(Span::styled(title, super::title_style()));
+        .title(Span::styled(title, super::title_style(&app.theme)));
     let inner = outer.inner(area);
     f.render_widget(outer, area);
 
@@ -59,23 +60,23 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
                 row.value.clone()
             };
             let style = if is_selected {
-                super::selected_style()
+                super::selected_style(&app.theme)
             } else {
                 Style::default()
             };
             Row::new(vec![
-                Cell::from(Span::styled(req_marker, Style::default().fg(Color::Red))),
+                Cell::from(Span::styled(req_marker, Style::default().fg(app.theme.param_required))),
                 Cell::from(Span::styled(
                     kind_label,
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(app.theme.text_secondary),
                 )),
                 Cell::from(Span::styled(
                     row.name.clone(),
-                    Style::default().fg(Color::Cyan),
+                    Style::default().fg(app.theme.text_key),
                 )),
                 Cell::from(Span::styled(
                     row.type_label.clone(),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(app.theme.text_secondary),
                 )),
                 Cell::from(value_display),
             ])
@@ -87,7 +88,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         .style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
-                .fg(Color::Yellow),
+                .fg(app.theme.text_accent),
         )
         .height(1);
 
@@ -107,7 +108,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let params_block = Block::default()
         .borders(Borders::BOTTOM)
         .border_style(if params_focused {
-            Style::default().fg(Color::Yellow)
+            Style::default().fg(app.theme.border_active)
         } else {
             Style::default()
         });
@@ -115,7 +116,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let table = Table::new(param_rows, widths)
         .header(header)
         .block(params_block)
-        .row_highlight_style(super::selected_style());
+        .row_highlight_style(super::selected_style(&app.theme));
 
     f.render_stateful_widget(table, chunks[0], &mut table_state);
 
@@ -129,14 +130,14 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
                     format!(" Body ({}) — Tab=focus ", body_row.type_label),
                 ),
                 FocusedPane::BodyNormal => (
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(app.theme.border_active),
                     format!(
                         " Body ({}) — NORMAL  hjkl=move  0/$=line  i/a=insert  Tab/Esc=params ",
                         body_row.type_label
                     ),
                 ),
                 FocusedPane::BodyInsert => (
-                    Style::default().fg(Color::Green),
+                    Style::default().fg(app.theme.border_editing),
                     format!(" Body ({}) — INSERT  Esc=normal ", body_row.type_label),
                 ),
             };
@@ -147,8 +148,12 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
                 .title(title_hint);
 
             let body_content: Text = match rb.focus {
-                FocusedPane::BodyNormal => body_with_block_cursor(&body_row.value, rb.cursor),
-                FocusedPane::BodyInsert => body_with_bar_cursor(&body_row.value, rb.cursor),
+                FocusedPane::BodyNormal => {
+                    body_with_block_cursor(&body_row.value, rb.cursor, &app.theme)
+                }
+                FocusedPane::BodyInsert => {
+                    body_with_bar_cursor(&body_row.value, rb.cursor, &app.theme)
+                }
                 _ => Text::raw(&body_row.value),
             };
 
@@ -180,7 +185,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
 
     if rb.rows.is_empty() {
         let hint = Paragraph::new("No parameters. Press Enter to send.")
-            .style(Style::default().fg(Color::DarkGray));
+            .style(Style::default().fg(app.theme.text_secondary));
         f.render_widget(hint, inner);
     }
 
@@ -189,7 +194,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let method_area = Rect::new(area.x + area.width.saturating_sub(12), area.y, 10, 1);
     let badge = Paragraph::new(rb.method.as_str()).style(
         Style::default()
-            .fg(super::method_color(&rb.method))
+            .fg(super::method_color(&rb.method, &app.theme))
             .add_modifier(Modifier::BOLD),
     );
     f.render_widget(badge, method_area);
@@ -197,8 +202,10 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
 
 /// Render body text with the character at `cursor` highlighted (block cursor,
 /// normal mode). No extra character is inserted into the string.
-fn body_with_block_cursor(value: &str, cursor: usize) -> Text<'static> {
-    let block_style = Style::default().fg(Color::Black).bg(Color::White);
+fn body_with_block_cursor(value: &str, cursor: usize, theme: &Theme) -> Text<'static> {
+    let block_style = Style::default()
+        .fg(theme.cursor_block_fg)
+        .bg(theme.cursor_block_bg);
     let lines: Vec<Line> = value
         .split('\n')
         .scan(0usize, |pos, line_str| {
@@ -235,8 +242,8 @@ fn body_with_block_cursor(value: &str, cursor: usize) -> Text<'static> {
 }
 
 /// Render body text with a `│` bar inserted at `cursor` (insert mode).
-fn body_with_bar_cursor(value: &str, cursor: usize) -> Text<'static> {
-    let bar_style = Style::default().fg(Color::Green);
+fn body_with_bar_cursor(value: &str, cursor: usize, theme: &Theme) -> Text<'static> {
+    let bar_style = Style::default().fg(theme.cursor_bar);
     let lines: Vec<Line> = value
         .split('\n')
         .scan(0usize, |pos, line_str| {

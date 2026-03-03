@@ -9,3 +9,79 @@ description = "Swagger Petstore v3 example"
 #
 # [servers.default_headers]
 # Authorization = "Bearer <token>"
+
+# ── Color theme ────────────────────────────────────────────────────────────────
+# All fields are optional — omit any you want to keep at its default value.
+# Colors can be named ("cyan", "dark_gray", "light_blue", …) or hex ("#1e1e2e").
+#
+# [theme]
+#
+# # HTTP method badge colors (defaults shown)
+# method_get    = "green"
+# method_post   = "yellow"
+# method_put    = "blue"
+# method_delete = "red"
+# method_patch  = "cyan"
+# method_other  = "white"
+#
+# # HTTP status-code range colors
+# status_2xx   = "green"
+# status_3xx   = "yellow"
+# status_4xx   = "red"
+# status_5xx   = "magenta"
+# status_other = "white"
+#
+# # UI chrome
+# title            = "cyan"      # block/section title text
+# selected_bg      = "dark_gray" # selected list-item background
+# border_focused   = "cyan"      # active pane border
+# border_unfocused = "dark_gray" # inactive pane border
+# border_active    = "yellow"    # focused editable block / add-server active field
+# border_editing   = "green"     # body editor in INSERT mode
+#
+# # Text roles
+# text_primary   = "white"     # main content text
+# text_secondary = "dark_gray" # labels, hints, secondary info
+# text_url       = "blue"      # server URLs
+# text_key       = "cyan"      # JSON keys, header names, parameter names
+# text_tag       = "magenta"   # endpoint tags
+# text_accent    = "yellow"    # operation IDs, content-type values, table headers
+#
+# # Status indicators (icons shown next to server entries)
+# indicator_loading = "yellow"
+# indicator_success = "green"
+# indicator_error   = "red"
+#
+# # Help bar (bottom of screen)
+# help_key  = "yellow"    # keybinding labels  e.g. "Enter"
+# help_desc = "dark_gray" # keybinding descriptions e.g. "open"
+#
+# # Error banner
+# error = "red"
+#
+# # JSON response syntax highlighting
+# json_string = "green"
+# json_number = "yellow"
+# json_bool   = "magenta"
+# json_null   = "dark_gray"
+#
+# # Markdown rendering (server description panel)
+# md_h1    = "yellow"
+# md_h2    = "cyan"
+# md_code  = "green"
+# md_quote = "dark_gray"
+#
+# # Parameter list
+# param_required = "red"      # * required marker
+# param_location = "blue"     # [path] / [query] / [header]
+# param_type     = "green"    # type label
+# param_example  = "cyan"     # example value
+#
+# # Body editor cursors
+# cursor_block_fg = "black" # block cursor foreground (normal mode)
+# cursor_block_bg = "white" # block cursor background (normal mode)
+# cursor_bar      = "green" # bar cursor (insert mode)
+#
+# # Endpoint filter bar
+# filter_active   = "yellow" # while actively typing a filter
+# filter_inactive = "cyan"   # filter shown but not being edited

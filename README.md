@@ -137,6 +137,135 @@ The request builder has two panes: a **params table** (top) and a **body editor*
 
 ---
 
+## Themes
+
+Every color in the TUI can be overridden via a `[theme]` section in your config file. All fields are optional — omit any to keep the built-in default.
+
+```toml
+[theme]
+# HTTP method badge colors
+method_get    = "green"
+method_post   = "yellow"
+method_put    = "blue"
+method_delete = "red"
+method_patch  = "cyan"
+method_other  = "white"
+
+# HTTP status-code range colors
+status_2xx   = "green"
+status_3xx   = "yellow"
+status_4xx   = "red"
+status_5xx   = "magenta"
+status_other = "white"
+
+# UI chrome
+title            = "cyan"      # block/section title text
+selected_bg      = "dark_gray" # selected list-item background
+border_focused   = "cyan"      # active pane border
+border_unfocused = "dark_gray" # inactive pane border
+border_active    = "yellow"    # focused editable block / add-server active field
+border_editing   = "green"     # body editor in INSERT mode
+
+# Text roles
+text_primary   = "white"     # main content text
+text_secondary = "dark_gray" # labels, hints, secondary info
+text_url       = "blue"      # server URLs
+text_key       = "cyan"      # JSON keys, header names, parameter names
+text_tag       = "magenta"   # endpoint tags
+text_accent    = "yellow"    # operation IDs, content-type values, table column headers
+
+# Status indicators (icons next to server entries)
+indicator_loading = "yellow"
+indicator_success = "green"
+indicator_error   = "red"
+
+# Help bar (bottom of screen)
+help_key  = "yellow"    # keybinding labels  e.g. "Enter"
+help_desc = "dark_gray" # keybinding descriptions e.g. "open"
+
+# Error banner
+error = "red"
+
+# JSON response syntax highlighting
+json_string = "green"
+json_number = "yellow"
+json_bool   = "magenta"
+json_null   = "dark_gray"
+
+# Markdown rendering (server description panel)
+md_h1    = "yellow"
+md_h2    = "cyan"
+md_code  = "green"
+md_quote = "dark_gray"
+
+# Parameter list
+param_required = "red"   # * required marker
+param_location = "blue"  # [path] / [query] / [header]
+param_type     = "green" # type label
+param_example  = "cyan"  # example value
+
+# Body editor cursors
+cursor_block_fg = "black" # block cursor foreground (normal mode)
+cursor_block_bg = "white" # block cursor background (normal mode)
+cursor_bar      = "green" # bar cursor (insert mode)
+
+# Endpoint filter bar
+filter_active   = "yellow" # while actively typing a filter
+filter_inactive = "cyan"   # filter shown but not being edited
+```
+
+### Color values
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Named | `"cyan"` | `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `gray`, `dark_gray`, `white`, `light_red`, `light_green`, `light_yellow`, `light_blue`, `light_magenta`, `light_cyan`, `reset` |
+| Hex RGB | `"#1e1e2e"` | 24-bit `#rrggbb` — requires a true-color terminal |
+| ANSI index | `"42"` | 256-color palette index `0`–`255` |
+
+### Example: Catppuccin Mocha
+
+```toml
+[theme]
+method_get    = "#a6e3a1"
+method_post   = "#f9e2af"
+method_put    = "#89b4fa"
+method_delete = "#f38ba8"
+method_patch  = "#89dceb"
+
+status_2xx = "#a6e3a1"
+status_3xx = "#f9e2af"
+status_4xx = "#f38ba8"
+status_5xx = "#cba6f7"
+
+title          = "#89dceb"
+selected_bg    = "#313244"
+border_focused = "#89dceb"
+border_active  = "#f9e2af"
+border_editing = "#a6e3a1"
+
+text_primary   = "#cdd6f4"
+text_secondary = "#6c7086"
+text_url       = "#89b4fa"
+text_key       = "#89dceb"
+text_tag       = "#cba6f7"
+text_accent    = "#f9e2af"
+
+json_string = "#a6e3a1"
+json_number = "#f9e2af"
+json_bool   = "#cba6f7"
+json_null   = "#6c7086"
+
+md_h1   = "#f9e2af"
+md_h2   = "#89dceb"
+md_code = "#a6e3a1"
+
+help_key  = "#f9e2af"
+help_desc = "#6c7086"
+error     = "#f38ba8"
+```
+
+---
+
 ## Notes
 
 - Specs are fetched from the URL you provide. GitHub blob URLs (`/blob/`) won't work — use the raw URL (`/raw/` or `raw.githubusercontent.com`).

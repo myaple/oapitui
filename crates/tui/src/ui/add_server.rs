@@ -2,7 +2,7 @@ use crate::app::App;
 use crate::views::add_server::AddServerField;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::Span,
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
@@ -14,7 +14,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(Span::styled(" Add Server ", super::title_style()));
+        .title(Span::styled(" Add Server ", super::title_style(&app.theme)));
 
     let inner = block.inner(popup);
     f.render_widget(block, popup);
@@ -36,9 +36,9 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         .split(inner);
 
     let active_style = Style::default()
-        .fg(Color::Yellow)
+        .fg(app.theme.border_active)
         .add_modifier(Modifier::BOLD);
-    let inactive_style = Style::default().fg(Color::DarkGray);
+    let inactive_style = Style::default().fg(app.theme.border_unfocused);
 
     let field_style = |f: AddServerField| {
         if app.add_server.field == f {
