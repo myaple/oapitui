@@ -222,10 +222,11 @@ impl App {
                     let name = &self.config.servers[self.server_list.selected].name;
                     if let Some(spec) = self.specs.get(name) {
                         let endpoints = extract_endpoints(spec);
+                        let spec_url = &self.config.servers[self.server_list.selected].url;
                         let server_base = spec
                             .servers
                             .first()
-                            .map(|s| s.url.clone())
+                            .map(|s| resolve_server_base(spec_url, &s.url))
                             .unwrap_or_default();
                         self.endpoint_list =
                             EndpointListState::new(endpoints, name.clone(), server_base);
@@ -497,6 +498,28 @@ impl App {
             }
         });
     }
+}
+
+/// Resolve a server URL from an OpenAPI spec against the URL used to fetch the spec.
+/// If `server_url` is already absolute (starts with a scheme), it is returned as-is.
+/// If it is relative (e.g. `/api/v1`), the scheme and host are taken from `spec_url`.
+fn resolve_server_base(spec_url: &str, server_url: &str) -> String {
+    if server_url.starts_with("http://") || server_url.starts_with("https://") {
+        return server_url.to_string();
+    }
+    // Extract scheme://host from the spec URL and prepend it to the relative server URL.
+    if let Some(scheme_end) = spec_url.find("://") {
+        let after_scheme = &spec_url[scheme_end + 3..];
+        let host_end = after_scheme.find('/').unwrap_or(after_scheme.len());
+        let origin = &spec_url[..scheme_end + 3 + host_end];
+        let path = if server_url.starts_with('/') {
+            server_url.to_string()
+        } else {
+            format!("/{server_url}")
+        };
+        return format!("{origin}{path}");
+    }
+    server_url.to_string()
 }
 
 fn non_empty(s: &str) -> Option<String> {
