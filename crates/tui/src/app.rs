@@ -315,6 +315,24 @@ impl App {
 
     fn handle_endpoint_list(&mut self, code: KeyCode) {
         let el = &mut self.endpoint_list;
+
+        // Detail panel focus: j/k scroll the detail, Tab or Esc unfocuses
+        if el.detail_focused {
+            match code {
+                KeyCode::Char('j') | KeyCode::Down => {
+                    el.detail_scroll = el.detail_scroll.saturating_add(1);
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    el.detail_scroll = el.detail_scroll.saturating_sub(1);
+                }
+                KeyCode::Tab | KeyCode::Esc => {
+                    el.detail_focused = false;
+                }
+                _ => {}
+            }
+            return;
+        }
+
         match code {
             KeyCode::Esc if el.filter_active => {
                 el.filter_active = false;
@@ -328,6 +346,10 @@ impl App {
             KeyCode::Esc => self.screen = Screen::ServerList,
             KeyCode::Char('j') | KeyCode::Down if !el.filter_active => el.next(),
             KeyCode::Char('k') | KeyCode::Up if !el.filter_active => el.prev(),
+            KeyCode::Tab if !el.filter_active => {
+                el.detail_focused = true;
+                el.detail_scroll = 0;
+            }
             KeyCode::Char('/') if !el.filter_active => {
                 el.filter_active = true;
                 el.filter.clear();

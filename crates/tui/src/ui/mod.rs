@@ -55,6 +55,7 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
         Screen::EndpointList => &[
             ("↑/k↓/j", "navigate"),
             ("/", "filter"),
+            ("Tab", "focus detail"),
             ("Enter", "open"),
             ("Esc", "back"),
         ],
