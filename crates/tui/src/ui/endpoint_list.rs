@@ -18,8 +18,9 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let inner = outer.inner(area);
     f.render_widget(outer, area);
 
-    // Filter bar at bottom of inner area if active
-    let chunks = if el.filter_active {
+    // Filter bar at bottom of inner area when typing or a filter is applied
+    let show_filter_bar = el.filter_active || !el.filter.is_empty();
+    let chunks = if show_filter_bar {
         Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Min(0), Constraint::Length(1)])
@@ -73,9 +74,19 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let list = List::new(items).highlight_style(super::selected_style());
     f.render_stateful_widget(list, list_area, &mut list_state);
 
-    if el.filter_active {
-        let filter_bar =
-            Paragraph::new(format!("/ {}", el.filter)).style(Style::default().fg(Color::Yellow));
+    if show_filter_bar {
+        let (text, style) = if el.filter_active {
+            (
+                format!("/ {}_", el.filter),
+                Style::default().fg(Color::Yellow),
+            )
+        } else {
+            (
+                format!("/ {} (Enter to open, Esc to clear)", el.filter),
+                Style::default().fg(Color::Cyan),
+            )
+        };
+        let filter_bar = Paragraph::new(text).style(style);
         f.render_widget(filter_bar, chunks[1]);
     }
 
