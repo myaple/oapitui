@@ -319,6 +319,11 @@ impl App {
             KeyCode::Esc if el.filter_active => {
                 el.filter_active = false;
                 el.filter.clear();
+                el.selected = 0;
+            }
+            KeyCode::Esc if !el.filter.is_empty() => {
+                el.filter.clear();
+                el.selected = 0;
             }
             KeyCode::Esc => self.screen = Screen::ServerList,
             KeyCode::Char('j') | KeyCode::Down if !el.filter_active => el.next(),
@@ -326,12 +331,18 @@ impl App {
             KeyCode::Char('/') if !el.filter_active => {
                 el.filter_active = true;
                 el.filter.clear();
+                el.selected = 0;
             }
             KeyCode::Backspace if el.filter_active => {
                 el.filter.pop();
+                el.selected = 0;
             }
             KeyCode::Char(c) if el.filter_active => {
                 el.filter.push(c);
+                el.selected = 0;
+            }
+            KeyCode::Enter if el.filter_active => {
+                el.filter_active = false;
             }
             KeyCode::Enter => {
                 if let Some(ep) = el.selected_endpoint() {
