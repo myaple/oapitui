@@ -395,7 +395,7 @@ impl App {
                                 let _ = tx.send(BgMsg::ResponseReady(resp));
                             }
                             Err(e) => {
-                                let _ = tx.send(BgMsg::ResponseError(e.to_string()));
+                                let _ = tx.send(BgMsg::ResponseError(format!("{:#}", e)));
                             }
                         }
                     });
