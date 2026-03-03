@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table, TableState, Wrap},
     Frame,
 };
 
@@ -213,6 +213,29 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             .add_modifier(Modifier::BOLD),
     );
     f.render_widget(badge, method_area);
+
+    // ── Curl popup ────────────────────────────────────────────────────────────
+
+    if rb.show_curl {
+        let curl = rb.curl_command();
+        let lines: Vec<Line> = curl.lines().map(|l| Line::from(l.to_string())).collect();
+        let line_count = lines.len() as u16;
+        let popup_height = (line_count + 2).min(area.height.saturating_sub(4));
+        let popup_area = super::centered_rect_fixed(70, popup_height, area);
+
+        f.render_widget(Clear, popup_area);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(app.theme.border_focused))
+            .title(Span::styled(
+                " curl command — current values (Esc/c to close) ",
+                super::title_style(&app.theme),
+            ));
+        let para = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false });
+        f.render_widget(para, popup_area);
+    }
 }
 
 /// Render body text with the character at `cursor` highlighted (block cursor,
