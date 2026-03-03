@@ -1,3 +1,4 @@
+use crate::theme::Theme;
 use crate::views::{
     add_server::AddServerState, endpoint_list::EndpointListState,
     request_builder::RequestBuilderState, response_viewer::ResponseViewerState,
@@ -43,6 +44,7 @@ pub enum Screen {
 pub struct App {
     pub config: Config,
     pub config_path: Option<PathBuf>,
+    pub theme: Theme,
 
     // Per-server cached specs
     pub specs: HashMap<String, Arc<OpenAPI>>,
@@ -73,11 +75,13 @@ impl App {
     pub fn new(config_path: Option<PathBuf>) -> Result<Self> {
         let path_ref = config_path.as_ref().or(None);
         let config = Config::load(path_ref)?;
+        let theme = Theme::from_config(&config.theme);
         let (tx, rx) = mpsc::unbounded_channel();
 
         Ok(Self {
             config,
             config_path,
+            theme,
             specs: HashMap::new(),
             spec_loading: HashMap::new(),
             last_refreshed: HashMap::new(),

@@ -1,7 +1,8 @@
 use crate::app::App;
+use crate::theme::Theme;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Frame,
@@ -10,14 +11,14 @@ use ratatui::{
 pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(Span::styled(" oapitui — Servers ", super::title_style()));
+        .title(Span::styled(" oapitui — Servers ", super::title_style(&app.theme)));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
 
     if app.config.servers.is_empty() {
         let msg = Paragraph::new("No servers configured. Press 'a' to add one.")
-            .style(Style::default().fg(Color::DarkGray));
+            .style(Style::default().fg(app.theme.text_secondary));
         f.render_widget(msg, inner);
         return;
     }
@@ -39,17 +40,17 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             let loaded = app.specs.contains_key(&s.name);
 
             let status_icon = if loading {
-                Span::styled("⟳ ", Style::default().fg(Color::Yellow))
+                Span::styled("⟳ ", Style::default().fg(app.theme.indicator_loading))
             } else if loaded {
-                Span::styled("✓ ", Style::default().fg(Color::Green))
+                Span::styled("✓ ", Style::default().fg(app.theme.indicator_success))
             } else {
-                Span::styled("✗ ", Style::default().fg(Color::Red))
+                Span::styled("✗ ", Style::default().fg(app.theme.indicator_error))
             };
 
             let name = Span::styled(
                 s.name.clone(),
                 if i == app.server_list.selected {
-                    super::selected_style()
+                    super::selected_style(&app.theme)
                 } else {
                     Style::default()
                 },
@@ -63,7 +64,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     list_state.select(Some(app.server_list.selected));
 
     let list = List::new(items)
-        .highlight_style(super::selected_style())
+        .highlight_style(super::selected_style(&app.theme))
         .block(Block::default().borders(Borders::RIGHT));
 
     f.render_stateful_widget(list, chunks[0], &mut list_state);
@@ -89,7 +90,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             Line::from(vec![Span::styled("Name: ", bold), Span::raw(&server.name)]),
             Line::from(vec![
                 Span::styled("URL:  ", bold),
-                Span::styled(url_display, Style::default().fg(Color::Blue)),
+                Span::styled(url_display, Style::default().fg(app.theme.text_url)),
             ]),
         ];
 
@@ -98,14 +99,14 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             header.push(Line::from(""));
             header.push(Line::from(vec![
                 Span::styled("Endpoints: ", bold),
-                Span::styled(ep_count.to_string(), Style::default().fg(Color::Cyan)),
+                Span::styled(ep_count.to_string(), Style::default().fg(app.theme.text_key)),
             ]));
             if let Some(refreshed) = app.last_refreshed.get(&server.name) {
                 header.push(Line::from(vec![
                     Span::styled("Refreshed: ", bold),
                     Span::styled(
                         format_elapsed(refreshed.elapsed().as_secs()),
-                        Style::default().fg(Color::DarkGray),
+                        Style::default().fg(app.theme.text_secondary),
                     ),
                 ]));
             }
@@ -113,13 +114,13 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         } else if app.spec_loading.contains_key(&server.name) {
             header.push(Line::from(Span::styled(
                 "Loading spec…",
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(app.theme.indicator_loading),
             )));
             None
         } else {
             header.push(Line::from(Span::styled(
                 "Spec not loaded — press 'r' to fetch",
-                Style::default().fg(Color::Red),
+                Style::default().fg(app.theme.indicator_error),
             )));
             None
         };
@@ -134,7 +135,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         f.render_widget(Paragraph::new(header), detail_split[0]);
 
         if let Some(desc) = spec_desc {
-            let md_lines = markdown_to_lines(&desc);
+            let md_lines = markdown_to_lines(&desc, &app.theme);
             f.render_widget(
                 Paragraph::new(md_lines).wrap(Wrap { trim: false }),
                 detail_split[1],
@@ -143,7 +144,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
-fn markdown_to_lines(input: &str) -> Vec<Line<'static>> {
+fn markdown_to_lines(input: &str, theme: &Theme) -> Vec<Line<'static>> {
     use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
     let parser = Parser::new_ext(input, Options::ENABLE_STRIKETHROUGH);
@@ -158,10 +159,17 @@ fn markdown_to_lines(input: &str) -> Vec<Line<'static>> {
     // Stack of ordered-list counters; None = unordered
     let mut list_stack: Vec<Option<u64>> = Vec::new();
 
+    // Capture theme colors by value (Color is Copy)
+    let md_code = theme.md_code;
+    let md_h1 = theme.md_h1;
+    let md_h2 = theme.md_h2;
+    let text_primary = theme.text_primary;
+    let md_quote = theme.md_quote;
+
     let make_style = |bold: bool, italic: bool, code: bool, h: Option<HeadingLevel>| -> Style {
         let mut s = Style::default();
         if code {
-            return s.fg(Color::Green);
+            return s.fg(md_code);
         }
         if bold {
             s = s.add_modifier(Modifier::BOLD);
@@ -171,9 +179,9 @@ fn markdown_to_lines(input: &str) -> Vec<Line<'static>> {
         }
         if let Some(level) = h {
             s = s.add_modifier(Modifier::BOLD).fg(match level {
-                HeadingLevel::H1 => Color::Yellow,
-                HeadingLevel::H2 => Color::Cyan,
-                _ => Color::White,
+                HeadingLevel::H1 => md_h1,
+                HeadingLevel::H2 => md_h2,
+                _ => text_primary,
             });
         }
         s
@@ -238,7 +246,7 @@ fn markdown_to_lines(input: &str) -> Vec<Line<'static>> {
                 flush!();
             }
             Event::Start(Tag::BlockQuote(_)) => {
-                spans.push(Span::styled("▌ ", Style::default().fg(Color::DarkGray)));
+                spans.push(Span::styled("▌ ", Style::default().fg(md_quote)));
             }
             Event::End(TagEnd::BlockQuote(_)) => {
                 flush!();
@@ -259,7 +267,7 @@ fn markdown_to_lines(input: &str) -> Vec<Line<'static>> {
                 // Inline code span
                 spans.push(Span::styled(
                     format!("`{}`", text),
-                    Style::default().fg(Color::Green),
+                    Style::default().fg(md_code),
                 ));
             }
             Event::SoftBreak => spans.push(Span::raw(" ")),
@@ -268,7 +276,7 @@ fn markdown_to_lines(input: &str) -> Vec<Line<'static>> {
                 flush!();
                 lines.push(Line::styled(
                     "─".repeat(40),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(md_quote),
                 ));
                 lines.push(Line::from(""));
             }

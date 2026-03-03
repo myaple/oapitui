@@ -1,7 +1,8 @@
 use crate::app::App;
+use crate::theme::Theme;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
@@ -10,7 +11,7 @@ use ratatui::{
 pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let rv = &app.response_viewer;
 
-    let status_color = super::status_color(rv.status);
+    let status_color = app.theme.status_color(rv.status);
     let title = format!(
         " Response — {} {} — {}ms ",
         rv.status,
@@ -40,7 +41,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             .iter()
             .map(|(k, v)| {
                 Line::from(vec![
-                    Span::styled(format!("{k}: "), Style::default().fg(Color::Cyan)),
+                    Span::styled(format!("{k}: "), Style::default().fg(app.theme.text_key)),
                     Span::raw(v),
                 ])
             })
@@ -50,15 +51,24 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             .block(Block::default().borders(Borders::BOTTOM).title(" Headers "));
         f.render_widget(headers_widget, chunks[0]);
 
-        render_body(f, rv, chunks[1]);
+        render_body(f, rv, chunks[1], &app.theme);
     } else {
-        render_body(f, rv, inner);
+        render_body(f, rv, inner, &app.theme);
     }
 }
 
-fn render_body(f: &mut Frame, rv: &crate::views::response_viewer::ResponseViewerState, area: Rect) {
+fn render_body(
+    f: &mut Frame,
+    rv: &crate::views::response_viewer::ResponseViewerState,
+    area: Rect,
+    theme: &Theme,
+) {
     // Simple JSON syntax coloring: lines starting with keys get cyan keys
-    let lines: Vec<Line> = rv.body.lines().map(colorize_json_line).collect();
+    let lines: Vec<Line> = rv
+        .body
+        .lines()
+        .map(|line| colorize_json_line(line, theme))
+        .collect();
 
     let para = Paragraph::new(lines)
         .wrap(Wrap { trim: false })
@@ -67,7 +77,7 @@ fn render_body(f: &mut Frame, rv: &crate::views::response_viewer::ResponseViewer
     f.render_widget(para, area);
 }
 
-fn colorize_json_line(line: &str) -> Line<'static> {
+fn colorize_json_line(line: &str, theme: &Theme) -> Line<'static> {
     let trimmed = line.trim_start();
     let indent = line.len() - trimmed.len();
     let indent_str = " ".repeat(indent);
@@ -79,20 +89,20 @@ fn colorize_json_line(line: &str) -> Line<'static> {
         let val_trimmed = val_part.trim_start();
 
         let val_color = if val_trimmed.starts_with('"') {
-            Color::Green
+            theme.json_string
         } else if val_trimmed.starts_with(|c: char| c.is_ascii_digit() || c == '-') {
-            Color::Yellow
+            theme.json_number
         } else if val_trimmed == "true" || val_trimmed == "false" {
-            Color::Magenta
+            theme.json_bool
         } else if val_trimmed == "null" {
-            Color::DarkGray
+            theme.json_null
         } else {
-            Color::White
+            theme.text_primary
         };
 
         Line::from(vec![
             Span::raw(indent_str),
-            Span::styled(key_part.to_string(), Style::default().fg(Color::Cyan)),
+            Span::styled(key_part.to_string(), Style::default().fg(theme.text_key)),
             Span::raw(" "),
             Span::styled(val_trimmed.to_string(), Style::default().fg(val_color)),
         ])

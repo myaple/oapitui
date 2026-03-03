@@ -5,6 +5,7 @@ mod response_viewer;
 mod server_list;
 
 use crate::app::{App, Screen};
+use crate::theme::Theme;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -76,8 +77,8 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
         .iter()
         .flat_map(|(k, v)| {
             vec![
-                Span::styled(format!(" {k}"), Style::default().fg(Color::Yellow)),
-                Span::styled(format!(" {v} "), Style::default().fg(Color::DarkGray)),
+                Span::styled(format!(" {k}"), Style::default().fg(app.theme.help_key)),
+                Span::styled(format!(" {v} "), Style::default().fg(app.theme.help_desc)),
             ]
         })
         .collect();
@@ -107,10 +108,10 @@ fn render_error(f: &mut Frame, app: &App, area: Rect) {
         f.render_widget(Clear, popup_area);
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Red))
+            .border_style(Style::default().fg(app.theme.error))
             .title(" Error — press any key to dismiss ");
         let msg = Paragraph::new(err.as_str())
-            .style(Style::default().fg(Color::Red))
+            .style(Style::default().fg(app.theme.error))
             .wrap(Wrap { trim: true })
             .block(block);
         f.render_widget(msg, popup_area);
@@ -139,35 +140,18 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 }
 
 /// Colour for HTTP method badge.
-pub fn method_color(method: &str) -> Color {
-    match method {
-        "GET" => Color::Green,
-        "POST" => Color::Yellow,
-        "PUT" => Color::Blue,
-        "DELETE" => Color::Red,
-        "PATCH" => Color::Cyan,
-        _ => Color::White,
-    }
+pub fn method_color(method: &str, theme: &Theme) -> Color {
+    theme.method_color(method)
 }
 
-pub fn status_color(status: u16) -> Color {
-    match status {
-        200..=299 => Color::Green,
-        300..=399 => Color::Yellow,
-        400..=499 => Color::Red,
-        500..=599 => Color::Magenta,
-        _ => Color::White,
-    }
-}
-
-pub fn title_style() -> Style {
+pub fn title_style(theme: &Theme) -> Style {
     Style::default()
-        .fg(Color::Cyan)
+        .fg(theme.title)
         .add_modifier(Modifier::BOLD)
 }
 
-pub fn selected_style() -> Style {
+pub fn selected_style(theme: &Theme) -> Style {
     Style::default()
-        .bg(Color::DarkGray)
+        .bg(theme.selected_bg)
         .add_modifier(Modifier::BOLD)
 }

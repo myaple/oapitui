@@ -1,8 +1,9 @@
 use crate::app::App;
+use crate::theme::Theme;
 use oapitui_openapi::Endpoint;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
     Frame,
@@ -14,7 +15,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let title = format!(" {} — Endpoints ", el.server_name);
     let outer = Block::default()
         .borders(Borders::ALL)
-        .title(Span::styled(title, super::title_style()));
+        .title(Span::styled(title, super::title_style(&app.theme)));
 
     let inner = outer.inner(area);
     f.render_widget(outer, area);
@@ -51,23 +52,23 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             let method_span = Span::styled(
                 format!(" {:7}", ep.method),
                 Style::default()
-                    .fg(super::method_color(&ep.method))
+                    .fg(super::method_color(&ep.method, &app.theme))
                     .add_modifier(Modifier::BOLD),
             );
             let path_span = Span::styled(
                 format!(" {}", ep.path),
                 if i == el.selected {
                     Style::default()
-                        .fg(Color::White)
+                        .fg(app.theme.text_primary)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default().fg(app.theme.text_primary)
                 },
             );
             let summary_span = if !ep.summary.is_empty() {
                 Span::styled(
                     format!("  {}", ep.summary),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(app.theme.text_secondary),
                 )
             } else {
                 Span::raw("")
@@ -81,16 +82,16 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     list_state.select(Some(el.selected));
 
     let list_border_style = if el.detail_focused {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(app.theme.border_unfocused)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(app.theme.text_primary)
     };
     let list_block = Block::default()
         .borders(Borders::RIGHT)
         .border_style(list_border_style);
 
     let list = List::new(items)
-        .highlight_style(super::selected_style())
+        .highlight_style(super::selected_style(&app.theme))
         .block(list_block);
     f.render_stateful_widget(list, list_chunks[0], &mut list_state);
 
@@ -98,12 +99,12 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         let (text, style) = if el.filter_active {
             (
                 format!("/ {}_", el.filter),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(app.theme.filter_active),
             )
         } else {
             (
                 format!("/ {} (Enter to open, Esc to clear)", el.filter),
-                Style::default().fg(Color::Cyan),
+                Style::default().fg(app.theme.filter_inactive),
             )
         };
         let filter_bar = Paragraph::new(text).style(style);
@@ -112,9 +113,9 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
 
     // ── Right pane: detail sub-panel ─────────────────────────────────────────
     let detail_border_style = if el.detail_focused {
-        Style::default().fg(Color::Cyan)
+        Style::default().fg(app.theme.border_focused)
     } else {
-        Style::default().fg(Color::DarkGray)
+        Style::default().fg(app.theme.border_unfocused)
     };
     let detail_block = Block::default()
         .borders(Borders::LEFT)
@@ -122,9 +123,9 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         .title(Span::styled(
             " Detail (Tab to focus, j/k to scroll) ",
             if el.detail_focused {
-                super::title_style()
+                super::title_style(&app.theme)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(app.theme.text_secondary)
             },
         ));
 
@@ -132,7 +133,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(detail_block, detail_area);
 
     if let Some(ep) = filtered.get(el.selected) {
-        let lines = build_detail_lines(ep);
+        let lines = build_detail_lines(ep, &app.theme);
         let total_lines = lines.len() as u16;
 
         let para = Paragraph::new(lines)
@@ -152,17 +153,17 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
     } else {
         let placeholder = Paragraph::new(Span::styled(
             "Select an endpoint to view details",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(app.theme.text_secondary),
         ));
         f.render_widget(placeholder, detail_inner);
     }
 }
 
-fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
+fn build_detail_lines(ep: &Endpoint, theme: &Theme) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();
 
     // ── Method + Path header ─────────────────────────────────────────────────
-    let method_color = super::method_color(&ep.method);
+    let method_color = theme.method_color(&ep.method);
     lines.push(Line::from(vec![
         Span::styled(
             ep.method.clone(),
@@ -174,7 +175,7 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
         Span::styled(
             ep.path.clone(),
             Style::default()
-                .fg(Color::White)
+                .fg(theme.text_primary)
                 .add_modifier(Modifier::BOLD),
         ),
     ]));
@@ -183,8 +184,8 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
     // ── Summary ──────────────────────────────────────────────────────────────
     if !ep.summary.is_empty() {
         lines.push(Line::from(vec![
-            Span::styled("Summary  ", Style::default().fg(Color::DarkGray)),
-            Span::styled(ep.summary.clone(), Style::default().fg(Color::White)),
+            Span::styled("Summary  ", Style::default().fg(theme.text_secondary)),
+            Span::styled(ep.summary.clone(), Style::default().fg(theme.text_primary)),
         ]));
     }
 
@@ -194,13 +195,13 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
         lines.push(Line::from(Span::styled(
             "Description",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(theme.title)
                 .add_modifier(Modifier::BOLD),
         )));
         for desc_line in ep.description.lines() {
             lines.push(Line::from(Span::styled(
                 desc_line.to_string(),
-                Style::default().fg(Color::White),
+                Style::default().fg(theme.text_primary),
             )));
         }
     }
@@ -209,30 +210,30 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
     if let Some(op_id) = &ep.operation_id {
         lines.push(Line::from(""));
         lines.push(Line::from(vec![
-            Span::styled("Operation ", Style::default().fg(Color::DarkGray)),
-            Span::styled(op_id.clone(), Style::default().fg(Color::Yellow)),
+            Span::styled("Operation ", Style::default().fg(theme.text_secondary)),
+            Span::styled(op_id.clone(), Style::default().fg(theme.text_accent)),
         ]));
     }
 
     // ── Tags ─────────────────────────────────────────────────────────────────
     if !ep.tags.is_empty() {
         lines.push(Line::from(vec![
-            Span::styled("Tags     ", Style::default().fg(Color::DarkGray)),
-            Span::styled(ep.tags.join(", "), Style::default().fg(Color::Magenta)),
+            Span::styled("Tags     ", Style::default().fg(theme.text_secondary)),
+            Span::styled(ep.tags.join(", "), Style::default().fg(theme.text_tag)),
         ]));
     }
 
     // ── Parameters ───────────────────────────────────────────────────────────
     if !ep.parameters.is_empty() {
         lines.push(Line::from(""));
-        lines.push(section_divider("Parameters"));
+        lines.push(section_divider("Parameters", theme));
 
         for param in &ep.parameters {
             lines.push(Line::from(""));
             let req_style = if param.required {
-                Style::default().fg(Color::Red)
+                Style::default().fg(theme.param_required)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(theme.text_secondary)
             };
             let req_marker = if param.required { "* " } else { "  " };
             lines.push(Line::from(vec![
@@ -240,18 +241,18 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
                 Span::styled(
                     param.name.clone(),
                     Style::default()
-                        .fg(Color::White)
+                        .fg(theme.text_primary)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled("  ", Style::default()),
                 Span::styled(
                     format!("[{}]", param.location),
-                    Style::default().fg(Color::Blue),
+                    Style::default().fg(theme.param_location),
                 ),
                 Span::styled("  ", Style::default()),
                 Span::styled(
                     param.schema_type.clone(),
-                    Style::default().fg(Color::Green),
+                    Style::default().fg(theme.param_type),
                 ),
             ]));
 
@@ -260,7 +261,7 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
                     Span::raw("  "),
                     Span::styled(
                         param.description.clone(),
-                        Style::default().fg(Color::DarkGray),
+                        Style::default().fg(theme.text_secondary),
                     ),
                 ]));
             }
@@ -268,8 +269,8 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
             let example_str = serde_json::to_string(&param.example).unwrap_or_default();
             if !example_str.is_empty() && example_str != "\"\"" && example_str != "null" {
                 lines.push(Line::from(vec![
-                    Span::styled("  example  ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(example_str, Style::default().fg(Color::Cyan)),
+                    Span::styled("  example  ", Style::default().fg(theme.text_secondary)),
+                    Span::styled(example_str, Style::default().fg(theme.param_example)),
                 ]));
             }
         }
@@ -278,17 +279,17 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
     // ── Request Body ─────────────────────────────────────────────────────────
     if let Some(body) = &ep.request_body {
         lines.push(Line::from(""));
-        lines.push(section_divider("Request Body"));
+        lines.push(section_divider("Request Body", theme));
         lines.push(Line::from(""));
         lines.push(Line::from(vec![
-            Span::styled("Content-Type  ", Style::default().fg(Color::DarkGray)),
-            Span::styled(body.content_type.clone(), Style::default().fg(Color::Yellow)),
+            Span::styled("Content-Type  ", Style::default().fg(theme.text_secondary)),
+            Span::styled(body.content_type.clone(), Style::default().fg(theme.text_accent)),
         ]));
 
         if !body.description.is_empty() {
             lines.push(Line::from(vec![
-                Span::styled("Description   ", Style::default().fg(Color::DarkGray)),
-                Span::styled(body.description.clone(), Style::default().fg(Color::White)),
+                Span::styled("Description   ", Style::default().fg(theme.text_secondary)),
+                Span::styled(body.description.clone(), Style::default().fg(theme.text_primary)),
             ]));
         }
 
@@ -297,12 +298,12 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "Schema example:",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.text_secondary),
         )));
         for ex_line in example_str.lines() {
             lines.push(Line::from(Span::styled(
                 ex_line.to_string(),
-                Style::default().fg(Color::Green),
+                Style::default().fg(theme.md_code),
             )));
         }
     }
@@ -310,7 +311,7 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
     // ── Responses ────────────────────────────────────────────────────────────
     if !ep.responses.is_empty() {
         lines.push(Line::from(""));
-        lines.push(section_divider("Responses"));
+        lines.push(section_divider("Responses", theme));
         lines.push(Line::from(""));
         let response_spans: Vec<Span> = ep
             .responses
@@ -318,7 +319,7 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
             .enumerate()
             .flat_map(|(i, code)| {
                 let status: u16 = code.parse().unwrap_or(0);
-                let color = super::status_color(status);
+                let color = theme.status_color(status);
                 let mut spans = vec![Span::styled(
                     code.clone(),
                     Style::default().fg(color).add_modifier(Modifier::BOLD),
@@ -336,11 +337,11 @@ fn build_detail_lines(ep: &Endpoint) -> Vec<Line<'static>> {
     lines
 }
 
-fn section_divider(title: &str) -> Line<'static> {
+fn section_divider(title: &str, theme: &Theme) -> Line<'static> {
     Line::from(Span::styled(
         format!("── {} ", title),
         Style::default()
-            .fg(Color::Cyan)
+            .fg(theme.title)
             .add_modifier(Modifier::BOLD),
     ))
 }
