@@ -9,7 +9,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
 
@@ -87,7 +87,18 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
 fn render_error(f: &mut Frame, app: &App, area: Rect) {
     if let Some(err) = &app.error {
         let width = area.width.saturating_sub(4);
-        let height = 3u16;
+        // Calculate how many lines the text needs when wrapped inside the block
+        // (inner width = block width minus 2 border chars)
+        let inner_width = width.saturating_sub(2) as usize;
+        let text_lines = if inner_width == 0 {
+            1
+        } else {
+            err.lines()
+                .map(|line| (line.len().max(1) + inner_width - 1) / inner_width)
+                .sum::<usize>()
+                .max(1)
+        };
+        let height = (text_lines as u16 + 2).min(8); // +2 for borders, cap at 8 rows
         let x = 2;
         let y = area.height.saturating_sub(height + 2);
         let popup_area = Rect::new(x, y, width, height);
@@ -99,6 +110,7 @@ fn render_error(f: &mut Frame, app: &App, area: Rect) {
             .title(" Error — press any key to dismiss ");
         let msg = Paragraph::new(err.as_str())
             .style(Style::default().fg(Color::Red))
+            .wrap(Wrap { trim: true })
             .block(block);
         f.render_widget(msg, popup_area);
     }
