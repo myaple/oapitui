@@ -24,11 +24,9 @@ COPY crates crates
 RUN touch crates/*/src/*.rs && \
     cargo build --release --bin oapitui --target x86_64-unknown-linux-musl
 
-# ── Runtime stage (static binary — no OS needed) ───────────────────────────────
-FROM scratch
+# ── Runtime stage (UBI9) ───────────────────────────────────────────────────────
+FROM registry.access.redhat.com/ubi9/ubi-minimal
 
-# CA certificates for HTTPS spec fetching
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/oapitui /oapitui
+COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/oapitui /usr/local/bin/oapitui
 
-ENTRYPOINT ["/oapitui"]
+ENTRYPOINT ["/usr/local/bin/oapitui"]
