@@ -4,7 +4,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
 };
 
@@ -52,8 +52,28 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         f.render_widget(headers_widget, chunks[0]);
 
         render_body(f, rv, chunks[1], &app.theme);
+        rv.page_size.set(chunks[1].height);
     } else {
         render_body(f, rv, inner, &app.theme);
+        rv.page_size.set(inner.height);
+    }
+
+    // ── Save-to-file dialog ───────────────────────────────────────────────────
+    if let Some(ref filename) = rv.save_dialog {
+        let popup_area = super::centered_rect_fixed(50, 5, area);
+        f.render_widget(Clear, popup_area);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(app.theme.border_focused))
+            .title(Span::styled(
+                " Save response body to file ",
+                super::title_style(&app.theme),
+            ));
+        let text = format!("Filename: {filename}_");
+        let para = Paragraph::new(text)
+            .block(block)
+            .style(Style::default().fg(app.theme.text_primary));
+        f.render_widget(para, popup_area);
     }
 }
 

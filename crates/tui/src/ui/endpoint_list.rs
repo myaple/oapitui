@@ -1,18 +1,26 @@
-use crate::app::App;
+use crate::app::{build_curl_command, App};
 use crate::theme::Theme;
 use oapitui_openapi::Endpoint;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{
+        Block, Borders, Clear, List, ListItem, ListState, Paragraph, Scrollbar,
+        ScrollbarOrientation, ScrollbarState, Wrap,
+    },
     Frame,
 };
 
 pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let el = &app.endpoint_list;
 
-    let title = format!(" {} — Endpoints ", el.server_name);
+    let sort_label = el.sort_mode.label();
+    let title = if sort_label == "none" {
+        format!(" {} — Endpoints ", el.server_name)
+    } else {
+        format!(" {} — Endpoints  [sort: {}] ", el.server_name, sort_label)
+    };
     let outer = Block::default()
         .borders(Borders::ALL)
         .title(Span::styled(title, super::title_style(&app.theme)));
@@ -42,6 +50,9 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             .constraints([Constraint::Min(0)])
             .split(list_area)
     };
+
+    // Update page_size so keyboard handler can page correctly
+    el.page_size.set(list_chunks[0].height);
 
     let filtered = el.filtered();
 
@@ -144,10 +155,9 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         // Scrollbar on the right edge of the detail inner area
         if total_lines > detail_inner.height {
             let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
-            let mut scrollbar_state = ScrollbarState::new(
-                total_lines.saturating_sub(detail_inner.height) as usize,
-            )
-            .position(el.detail_scroll as usize);
+            let mut scrollbar_state =
+                ScrollbarState::new(total_lines.saturating_sub(detail_inner.height) as usize)
+                    .position(el.detail_scroll as usize);
             f.render_stateful_widget(scrollbar, detail_inner, &mut scrollbar_state);
         }
     } else {
@@ -156,6 +166,30 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(app.theme.text_secondary),
         ));
         f.render_widget(placeholder, detail_inner);
+    }
+
+    // ── Curl popup ────────────────────────────────────────────────────────────
+    if el.show_curl {
+        if let Some(ep) = filtered.get(el.selected) {
+            let curl = build_curl_command(&el.server_base, ep);
+            let lines: Vec<Line> = curl.lines().map(|l| Line::from(l.to_string())).collect();
+            let line_count = lines.len() as u16;
+            let popup_height = (line_count + 2).min(area.height.saturating_sub(4));
+            let popup_area = super::centered_rect_fixed(70, popup_height, area);
+
+            f.render_widget(Clear, popup_area);
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(app.theme.border_focused))
+                .title(Span::styled(
+                    " curl command (Esc/c to close) ",
+                    super::title_style(&app.theme),
+                ));
+            let para = Paragraph::new(lines)
+                .block(block)
+                .wrap(Wrap { trim: false });
+            f.render_widget(para, popup_area);
+        }
     }
 }
 
@@ -283,13 +317,19 @@ fn build_detail_lines(ep: &Endpoint, theme: &Theme) -> Vec<Line<'static>> {
         lines.push(Line::from(""));
         lines.push(Line::from(vec![
             Span::styled("Content-Type  ", Style::default().fg(theme.text_secondary)),
-            Span::styled(body.content_type.clone(), Style::default().fg(theme.text_accent)),
+            Span::styled(
+                body.content_type.clone(),
+                Style::default().fg(theme.text_accent),
+            ),
         ]));
 
         if !body.description.is_empty() {
             lines.push(Line::from(vec![
                 Span::styled("Description   ", Style::default().fg(theme.text_secondary)),
-                Span::styled(body.description.clone(), Style::default().fg(theme.text_primary)),
+                Span::styled(
+                    body.description.clone(),
+                    Style::default().fg(theme.text_primary),
+                ),
             ]));
         }
 

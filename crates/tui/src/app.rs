@@ -198,6 +198,24 @@ impl App {
                     self.server_list.selected -= 1;
                 }
             }
+            KeyCode::Home => {
+                self.server_list.selected = 0;
+            }
+            KeyCode::End => {
+                if n > 0 {
+                    self.server_list.selected = n - 1;
+                }
+            }
+            KeyCode::PageUp => {
+                let page = self.server_list.page_size.get().max(1) as usize;
+                self.server_list.selected = self.server_list.selected.saturating_sub(page);
+            }
+            KeyCode::PageDown => {
+                if n > 0 {
+                    let page = self.server_list.page_size.get().max(1) as usize;
+                    self.server_list.selected = (self.server_list.selected + page).min(n - 1);
+                }
+            }
             KeyCode::Char('a') => {
                 self.add_server = AddServerState::default();
                 self.screen = Screen::AddServer;
@@ -320,6 +338,15 @@ impl App {
     fn handle_endpoint_list(&mut self, code: KeyCode) {
         let el = &mut self.endpoint_list;
 
+        // Curl popup: Esc or 'c' closes it; all other keys are swallowed
+        if el.show_curl {
+            match code {
+                KeyCode::Esc | KeyCode::Char('c') => el.show_curl = false,
+                _ => {}
+            }
+            return;
+        }
+
         // Detail panel focus: j/k scroll the detail, Tab or Esc unfocuses
         if el.detail_focused {
             match code {
@@ -348,11 +375,25 @@ impl App {
                 el.selected = 0;
             }
             KeyCode::Esc => self.screen = Screen::ServerList,
+            KeyCode::Char('q') if !el.filter_active => self.should_quit = true,
             KeyCode::Char('j') | KeyCode::Down if !el.filter_active => el.next(),
             KeyCode::Char('k') | KeyCode::Up if !el.filter_active => el.prev(),
+            KeyCode::Home if !el.filter_active => el.home(),
+            KeyCode::End if !el.filter_active => el.end(),
+            KeyCode::PageUp if !el.filter_active => el.page_up(),
+            KeyCode::PageDown if !el.filter_active => el.page_down(),
             KeyCode::Tab if !el.filter_active => {
                 el.detail_focused = true;
                 el.detail_scroll = 0;
+            }
+            KeyCode::Char('s') if !el.filter_active => {
+                el.sort_mode = el.sort_mode.next();
+                el.selected = 0;
+            }
+            KeyCode::Char('c') if !el.filter_active => {
+                if el.selected_endpoint().is_some() {
+                    el.show_curl = true;
+                }
             }
             KeyCode::Char('/') if !el.filter_active => {
                 el.filter_active = true;
@@ -403,6 +444,7 @@ impl App {
             // ── Top pane: navigating param rows ──────────────────────────────
             FocusedPane::ParamsNav => match code {
                 KeyCode::Esc => self.screen = Screen::EndpointList,
+                KeyCode::Char('q') => self.should_quit = true,
                 KeyCode::Char('j') | KeyCode::Down => rb.next_row(),
                 KeyCode::Char('k') | KeyCode::Up => rb.prev_row(),
                 KeyCode::Char('e') => {
@@ -506,11 +548,57 @@ impl App {
 
     fn handle_response_viewer(&mut self, code: KeyCode) {
         let rv = &mut self.response_viewer;
+
+        // Save dialog: handle filename input
+        if rv.save_dialog.is_some() {
+            match code {
+                KeyCode::Esc => rv.save_dialog = None,
+                KeyCode::Backspace => {
+                    if let Some(ref mut name) = rv.save_dialog {
+                        name.pop();
+                    }
+                }
+                KeyCode::Char(c) => {
+                    if let Some(ref mut name) = rv.save_dialog {
+                        name.push(c);
+                    }
+                }
+                KeyCode::Enter => {
+                    if let Some(ref name) = rv.save_dialog {
+                        let path = name.trim().to_string();
+                        if !path.is_empty() {
+                            if let Err(e) = std::fs::write(&path, &rv.body) {
+                                self.error = Some(format!("Failed to save '{path}': {e}"));
+                            }
+                        }
+                    }
+                    rv.save_dialog = None;
+                }
+                _ => {}
+            }
+            return;
+        }
+
         match code {
             KeyCode::Esc => self.screen = Screen::RequestBuilder,
+            KeyCode::Char('q') => self.should_quit = true,
             KeyCode::Char('j') | KeyCode::Down => rv.scroll = rv.scroll.saturating_add(1),
             KeyCode::Char('k') | KeyCode::Up => rv.scroll = rv.scroll.saturating_sub(1),
+            KeyCode::PageDown => {
+                let page = rv.page_size.get().max(1);
+                rv.scroll = rv.scroll.saturating_add(page);
+            }
+            KeyCode::PageUp => {
+                let page = rv.page_size.get().max(1);
+                rv.scroll = rv.scroll.saturating_sub(page);
+            }
+            KeyCode::Home => rv.scroll = 0,
+            KeyCode::End => {
+                let total = rv.body.lines().count() as u16;
+                rv.scroll = total.saturating_sub(rv.page_size.get());
+            }
             KeyCode::Char('h') => rv.show_headers = !rv.show_headers,
+            KeyCode::Char('s') => rv.save_dialog = Some(String::new()),
             _ => {}
         }
     }
@@ -566,4 +654,35 @@ fn non_empty(s: &str) -> Option<String> {
     } else {
         Some(t.to_string())
     }
+}
+
+/// Build a template curl command for an endpoint.
+pub fn build_curl_command(server_base: &str, ep: &oapitui_openapi::Endpoint) -> String {
+    let base = server_base.trim_end_matches('/');
+    let url = format!("{base}{}", ep.path);
+
+    let mut lines: Vec<String> = vec![format!("curl -X {} \\", ep.method)];
+    lines.push(format!("  '{url}' \\"));
+
+    for param in &ep.parameters {
+        if param.location == "header" {
+            lines.push(format!("  -H '{}: <value>' \\", param.name));
+        }
+    }
+
+    if let Some(body) = &ep.request_body {
+        lines.push(format!("  -H 'Content-Type: {}' \\", body.content_type));
+        let example =
+            serde_json::to_string_pretty(&body.example).unwrap_or_else(|_| "{}".to_string());
+        // Escape single quotes in the body example
+        let escaped = example.replace('\'', "'\\''");
+        lines.push(format!("  -d '{escaped}'"));
+    } else {
+        // Remove trailing backslash from the last line
+        if let Some(last) = lines.last_mut() {
+            *last = last.trim_end_matches(" \\").to_string();
+        }
+    }
+
+    lines.join("\n")
 }

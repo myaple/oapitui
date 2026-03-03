@@ -42,11 +42,13 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
     let keys: &[(&str, &str)] = match app.screen {
         Screen::ServerList => &[
             ("↑/k↓/j", "navigate"),
+            ("PgUp/PgDn", "page"),
+            ("Home/End", "first/last"),
             ("Enter", "open"),
             ("a", "add"),
             ("d", "delete"),
             ("r", "refresh"),
-            ("^C", "quit"),
+            ("q/^C", "quit"),
         ],
         Screen::AddServer => &[
             ("Tab", "switch field"),
@@ -55,21 +57,29 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
         ],
         Screen::EndpointList => &[
             ("↑/k↓/j", "navigate"),
+            ("PgUp/PgDn", "page"),
+            ("Home/End", "first/last"),
             ("/", "filter"),
-            ("Tab", "focus detail"),
+            ("s", "sort"),
+            ("c", "curl"),
+            ("Tab", "detail"),
             ("Enter", "open"),
-            ("Esc", "back"),
+            ("q", "quit"),
         ],
         Screen::RequestBuilder => &[
             ("↑/k↓/j", "navigate rows"),
             ("e", "edit"),
             ("Esc", "stop edit / back"),
             ("Enter", "send"),
+            ("q", "quit"),
         ],
         Screen::ResponseViewer => &[
             ("↑/k↓/j", "scroll"),
+            ("PgUp/PgDn", "page"),
+            ("Home/End", "top/bottom"),
             ("h", "toggle headers"),
-            ("Esc", "back"),
+            ("s", "save"),
+            ("q", "quit"),
         ],
     };
 
@@ -96,7 +106,7 @@ fn render_error(f: &mut Frame, app: &App, area: Rect) {
             1
         } else {
             err.lines()
-                .map(|line| (line.len().max(1) + inner_width - 1) / inner_width)
+                .map(|line| line.len().max(1).div_ceil(inner_width))
                 .sum::<usize>()
                 .max(1)
         };
@@ -116,6 +126,15 @@ fn render_error(f: &mut Frame, app: &App, area: Rect) {
             .block(block);
         f.render_widget(msg, popup_area);
     }
+}
+
+/// Centered rectangle with fixed dimensions (in columns / rows).
+pub fn centered_rect_fixed(width: u16, height: u16, r: Rect) -> Rect {
+    let width = width.min(r.width);
+    let height = height.min(r.height);
+    let x = r.x + (r.width.saturating_sub(width)) / 2;
+    let y = r.y + (r.height.saturating_sub(height)) / 2;
+    Rect::new(x, y, width, height)
 }
 
 /// Centered rectangle helper.

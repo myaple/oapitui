@@ -1,6 +1,6 @@
 use oapitui_client::ResponseResult;
+use std::cell::Cell;
 
-#[derive(Default)]
 pub struct ResponseViewerState {
     pub status: u16,
     pub elapsed_ms: u128,
@@ -8,6 +8,25 @@ pub struct ResponseViewerState {
     pub body: String,
     pub scroll: u16,
     pub show_headers: bool,
+    /// When `Some(s)`, the save-to-file dialog is open and `s` is the typed filename.
+    pub save_dialog: Option<String>,
+    /// Height of the visible body area — updated by the UI renderer each frame.
+    pub page_size: Cell<u16>,
+}
+
+impl Default for ResponseViewerState {
+    fn default() -> Self {
+        Self {
+            status: 0,
+            elapsed_ms: 0,
+            headers: Vec::new(),
+            body: String::new(),
+            scroll: 0,
+            show_headers: false,
+            save_dialog: None,
+            page_size: Cell::new(10),
+        }
+    }
 }
 
 impl ResponseViewerState {
@@ -24,6 +43,8 @@ impl ResponseViewerState {
             body,
             scroll: 0,
             show_headers: false,
+            save_dialog: None,
+            page_size: Cell::new(10),
         }
     }
 }

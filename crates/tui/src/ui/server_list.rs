@@ -9,9 +9,10 @@ use ratatui::{
 };
 
 pub fn render(f: &mut Frame, app: &App, area: Rect) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(Span::styled(" oapitui — Servers ", super::title_style(&app.theme)));
+    let block = Block::default().borders(Borders::ALL).title(Span::styled(
+        " oapitui — Servers ",
+        super::title_style(&app.theme),
+    ));
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -67,6 +68,8 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         .highlight_style(super::selected_style(&app.theme))
         .block(Block::default().borders(Borders::RIGHT));
 
+    // Update page_size so keyboard handler can page correctly
+    app.server_list.page_size.set(chunks[0].height);
     f.render_stateful_widget(list, chunks[0], &mut list_state);
 
     // --- Detail panel ---
@@ -99,7 +102,10 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
             header.push(Line::from(""));
             header.push(Line::from(vec![
                 Span::styled("Endpoints: ", bold),
-                Span::styled(ep_count.to_string(), Style::default().fg(app.theme.text_key)),
+                Span::styled(
+                    ep_count.to_string(),
+                    Style::default().fg(app.theme.text_key),
+                ),
             ]));
             if let Some(refreshed) = app.last_refreshed.get(&server.name) {
                 header.push(Line::from(vec![
@@ -274,10 +280,7 @@ fn markdown_to_lines(input: &str, theme: &Theme) -> Vec<Line<'static>> {
             Event::HardBreak => flush!(),
             Event::Rule => {
                 flush!();
-                lines.push(Line::styled(
-                    "─".repeat(40),
-                    Style::default().fg(md_quote),
-                ));
+                lines.push(Line::styled("─".repeat(40), Style::default().fg(md_quote)));
                 lines.push(Line::from(""));
             }
             _ => {}
