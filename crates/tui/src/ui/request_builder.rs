@@ -53,19 +53,34 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
                 RowKind::Header => "header",
                 RowKind::Body => "body",
             };
-            let req_marker = if row.required { "*" } else { " " };
+            // Required params always show * in red.
+            // Optional enabled params show + in green (opted in).
+            // Optional disabled params show - in gray (skipped on send).
+            let (req_marker, marker_color) = if row.required {
+                ("*", app.theme.param_required)
+            } else if row.enabled {
+                ("+", app.theme.indicator_success)
+            } else {
+                ("-", app.theme.text_secondary)
+            };
+
             let value_display = if is_selected && editing_params {
                 format!("{}_", row.value)
             } else {
                 row.value.clone()
             };
-            let style = if is_selected {
+
+            let disabled = !row.required && !row.enabled;
+            let row_style = if is_selected {
                 super::selected_style(&app.theme)
+            } else if disabled {
+                Style::default().add_modifier(Modifier::DIM)
             } else {
                 Style::default()
             };
+
             Row::new(vec![
-                Cell::from(Span::styled(req_marker, Style::default().fg(app.theme.param_required))),
+                Cell::from(Span::styled(req_marker, Style::default().fg(marker_color))),
                 Cell::from(Span::styled(
                     kind_label,
                     Style::default().fg(app.theme.text_secondary),
@@ -80,7 +95,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
                 )),
                 Cell::from(value_display),
             ])
-            .style(style)
+            .style(row_style)
         })
         .collect();
 

@@ -32,6 +32,10 @@ pub struct FieldRow {
     pub type_label: String,
     pub value: String,
     pub required: bool,
+    /// Whether this param will be included in the request.
+    /// Required params are always enabled; optional params start disabled so
+    /// the user explicitly opts in to sending them.
+    pub enabled: bool,
 }
 
 pub struct RequestBuilderState {
@@ -83,6 +87,9 @@ impl RequestBuilderState {
                 type_label: p.schema_type.clone(),
                 value: value_to_string(&p.example),
                 required: p.required,
+                // Required params are always on; optional params start disabled
+                // so the user opts in to sending them instead of opting out.
+                enabled: p.required,
             });
         }
 
@@ -93,6 +100,7 @@ impl RequestBuilderState {
                 type_label: "string".to_string(),
                 value: v.clone(),
                 required: false,
+                enabled: true, // user-configured defaults are on by default
             });
         }
 
@@ -105,6 +113,7 @@ impl RequestBuilderState {
                 type_label: body.content_type.clone(),
                 value: pretty,
                 required: false,
+                enabled: true,
             });
         }
 
@@ -127,6 +136,18 @@ impl RequestBuilderState {
 
     pub fn has_body(&self) -> bool {
         self.rows.iter().any(|r| r.kind == RowKind::Body)
+    }
+
+    // ── Params-pane toggle ────────────────────────────────────────────────────
+
+    /// Toggle the enabled state of the currently selected optional param.
+    /// Required params cannot be toggled off.
+    pub fn toggle_enabled(&mut self) {
+        if let Some(row) = self.rows.get_mut(self.selected) {
+            if !row.required {
+                row.enabled = !row.enabled;
+            }
+        }
     }
 
     // ── Params-pane navigation ────────────────────────────────────────────────
@@ -371,15 +392,17 @@ impl RequestBuilderState {
         for row in &self.rows {
             match row.kind {
                 RowKind::PathParam => {
-                    path_params.insert(row.name.clone(), row.value.clone());
+                    if row.enabled {
+                        path_params.insert(row.name.clone(), row.value.clone());
+                    }
                 }
                 RowKind::QueryParam => {
-                    if !row.value.is_empty() {
+                    if row.enabled && !row.value.is_empty() {
                         query_params.insert(row.name.clone(), row.value.clone());
                     }
                 }
                 RowKind::Header => {
-                    if !row.value.is_empty() {
+                    if row.enabled && !row.value.is_empty() {
                         headers.insert(row.name.clone(), row.value.clone());
                     }
                 }

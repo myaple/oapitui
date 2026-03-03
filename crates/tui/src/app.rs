@@ -447,6 +447,7 @@ impl App {
                 KeyCode::Char('q') => self.should_quit = true,
                 KeyCode::Char('j') | KeyCode::Down => rb.next_row(),
                 KeyCode::Char('k') | KeyCode::Up => rb.prev_row(),
+                KeyCode::Char(' ') => rb.toggle_enabled(),
                 KeyCode::Char('e') => {
                     // Focus the param value for editing; place cursor at end.
                     rb.cursor = rb
