@@ -32,6 +32,10 @@ pub struct FieldRow {
     pub type_label: String,
     pub value: String,
     pub required: bool,
+    /// Whether this param will be included in the request.
+    /// Required params are always enabled; optional params start disabled so
+    /// the user explicitly opts in to sending them.
+    pub enabled: bool,
 }
 
 pub struct RequestBuilderState {
@@ -46,6 +50,8 @@ pub struct RequestBuilderState {
     pub cursor: usize,
     /// First key of a pending two-key sequence (e.g. 'd' before 'dw'/'dd').
     pub pending_key: Option<char>,
+    /// Whether the curl-command popup is visible.
+    pub show_curl: bool,
 }
 
 impl Default for RequestBuilderState {
@@ -59,6 +65,7 @@ impl Default for RequestBuilderState {
             focus: FocusedPane::ParamsNav,
             cursor: 0,
             pending_key: None,
+            show_curl: false,
         }
     }
 }
@@ -83,6 +90,9 @@ impl RequestBuilderState {
                 type_label: p.schema_type.clone(),
                 value: value_to_string(&p.example),
                 required: p.required,
+                // Required params are always on; optional params start disabled
+                // so the user opts in to sending them instead of opting out.
+                enabled: p.required,
             });
         }
 
@@ -93,6 +103,7 @@ impl RequestBuilderState {
                 type_label: "string".to_string(),
                 value: v.clone(),
                 required: false,
+                enabled: true, // user-configured defaults are on by default
             });
         }
 
@@ -105,6 +116,7 @@ impl RequestBuilderState {
                 type_label: body.content_type.clone(),
                 value: pretty,
                 required: false,
+                enabled: true,
             });
         }
 
@@ -115,6 +127,7 @@ impl RequestBuilderState {
             rows,
             selected: 0,
             focus: FocusedPane::ParamsNav,
+            show_curl: false,
             cursor: 0,
             pending_key: None,
         }
@@ -127,6 +140,18 @@ impl RequestBuilderState {
 
     pub fn has_body(&self) -> bool {
         self.rows.iter().any(|r| r.kind == RowKind::Body)
+    }
+
+    // ── Params-pane toggle ────────────────────────────────────────────────────
+
+    /// Toggle the enabled state of the currently selected optional param.
+    /// Required params cannot be toggled off.
+    pub fn toggle_enabled(&mut self) {
+        if let Some(row) = self.rows.get_mut(self.selected) {
+            if !row.required {
+                row.enabled = !row.enabled;
+            }
+        }
     }
 
     // ── Params-pane navigation ────────────────────────────────────────────────
@@ -362,6 +387,63 @@ impl RequestBuilderState {
 
     // ── Request assembly ──────────────────────────────────────────────────────
 
+    /// Build a curl command string reflecting the current enabled param values.
+    pub fn curl_command(&self) -> String {
+        let req = self.build_request();
+
+        // Substitute path params into the template.
+        let mut path = self.path_template.clone();
+        for (k, v) in &req.path_params {
+            path = path.replace(&format!("{{{k}}}"), v);
+        }
+
+        // Append enabled query params.
+        let query = if req.query_params.is_empty() {
+            String::new()
+        } else {
+            let mut pairs: Vec<String> = req
+                .query_params
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            pairs.sort(); // deterministic order
+            format!("?{}", pairs.join("&"))
+        };
+
+        let base = self.base_url.trim_end_matches('/');
+        let url = format!("{base}{path}{query}");
+
+        let mut lines: Vec<String> = vec![format!("curl -X {} \\", self.method)];
+        lines.push(format!("  '{url}' \\"));
+
+        // Enabled headers (sorted for readability).
+        let mut header_pairs: Vec<(&String, &String)> = req.headers.iter().collect();
+        header_pairs.sort_by_key(|(k, _)| k.as_str());
+        for (k, v) in header_pairs {
+            let escaped = v.replace('\'', "'\\''");
+            lines.push(format!("  -H '{k}: {escaped}' \\"));
+        }
+
+        // Body (only if the body row is present and valid JSON).
+        if let Some(body) = &req.body {
+            let content_type = self
+                .rows
+                .iter()
+                .find(|r| r.kind == RowKind::Body)
+                .map(|r| r.type_label.as_str())
+                .unwrap_or("application/json");
+            lines.push(format!("  -H 'Content-Type: {content_type}' \\"));
+            let body_str =
+                serde_json::to_string_pretty(body).unwrap_or_else(|_| "{}".to_string());
+            let escaped = body_str.replace('\'', "'\\''");
+            lines.push(format!("  -d '{escaped}'"));
+        } else if let Some(last) = lines.last_mut() {
+            *last = last.trim_end_matches(" \\").to_string();
+        }
+
+        lines.join("\n")
+    }
+
     pub fn build_request(&self) -> RequestDef {
         let mut path_params = HashMap::new();
         let mut query_params = HashMap::new();
@@ -371,15 +453,17 @@ impl RequestBuilderState {
         for row in &self.rows {
             match row.kind {
                 RowKind::PathParam => {
-                    path_params.insert(row.name.clone(), row.value.clone());
+                    if row.enabled {
+                        path_params.insert(row.name.clone(), row.value.clone());
+                    }
                 }
                 RowKind::QueryParam => {
-                    if !row.value.is_empty() {
+                    if row.enabled && !row.value.is_empty() {
                         query_params.insert(row.name.clone(), row.value.clone());
                     }
                 }
                 RowKind::Header => {
-                    if !row.value.is_empty() {
+                    if row.enabled && !row.value.is_empty() {
                         headers.insert(row.name.clone(), row.value.clone());
                     }
                 }

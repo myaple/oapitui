@@ -440,6 +440,15 @@ impl App {
         use crate::views::request_builder::FocusedPane;
         let rb = &mut self.request_builder;
 
+        // Curl popup: dismiss on Esc or c before routing to normal handlers.
+        if rb.show_curl {
+            match code {
+                KeyCode::Esc | KeyCode::Char('c') => rb.show_curl = false,
+                _ => {}
+            }
+            return Ok(());
+        }
+
         match rb.focus {
             // ── Top pane: navigating param rows ──────────────────────────────
             FocusedPane::ParamsNav => match code {
@@ -447,6 +456,8 @@ impl App {
                 KeyCode::Char('q') => self.should_quit = true,
                 KeyCode::Char('j') | KeyCode::Down => rb.next_row(),
                 KeyCode::Char('k') | KeyCode::Up => rb.prev_row(),
+                KeyCode::Char(' ') => rb.toggle_enabled(),
+                KeyCode::Char('c') => rb.show_curl = true,
                 KeyCode::Char('e') => {
                     // Focus the param value for editing; place cursor at end.
                     rb.cursor = rb

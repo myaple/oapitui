@@ -68,7 +68,9 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
         ],
         Screen::RequestBuilder => &[
             ("↑/k↓/j", "navigate rows"),
+            ("Space", "toggle optional"),
             ("e", "edit"),
+            ("c", "curl"),
             ("Esc", "stop edit / back"),
             ("Enter", "send"),
             ("q", "quit"),
