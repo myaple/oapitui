@@ -47,7 +47,14 @@ description = "Internal service"
 
 [servers.default_headers]
 Authorization = "Bearer your-token-here"
+
+[[servers]]
+name = "Local spec"
+url  = "/path/to/openapi.json"         # local file paths are supported
+description = "Loaded from disk"
 ```
+
+The `url` field accepts both HTTP(S) URLs and local file paths. Local paths support `~` for the home directory (e.g. `~/projects/api/spec.yaml`). Both JSON and YAML spec files are supported.
 
 **Mutual TLS (mTLS)** — add a `[servers.tls]` block per server:
 
@@ -140,6 +147,7 @@ The request builder has two panes: a **params table** (top) and a **body editor*
 |-----|--------|
 | `j` / `k` | Move between parameters |
 | `e` | Edit selected value |
+| `t` | Cycle body content type (when multiple available) |
 | `E` | Switch environment |
 | `Esc` | Stop editing / go back |
 | `Tab` | Focus body pane |

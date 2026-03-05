@@ -36,18 +36,37 @@ pub struct ResolvedBody {
     pub content_type: String,
     pub example: Value,
     pub description: String,
+    /// All available content types for this request body, with their examples.
+    /// The first entry matches `content_type` / `example` above.
+    pub alternatives: Vec<(String, Value)>,
 }
 
-/// Fetch and parse an OpenAPI spec from a URL.
+/// Fetch and parse an OpenAPI spec from a URL or local file path.
+///
+/// If the source starts with `http://` or `https://`, it is fetched via HTTP.
+/// Otherwise it is treated as a local file path.
 pub async fn fetch_spec(url: &str, tls: &TlsConfig) -> Result<OpenAPI> {
-    let client = build_client(tls)?;
-    let text = client
-        .get(url)
-        .send()
-        .await
-        .with_context(|| format!("fetching {url}"))?
-        .text()
-        .await?;
+    let text = if url.starts_with("http://") || url.starts_with("https://") {
+        let client = build_client(tls)?;
+        client
+            .get(url)
+            .send()
+            .await
+            .with_context(|| format!("fetching {url}"))?
+            .text()
+            .await?
+    } else {
+        // Treat as local file path — expand ~ to home dir
+        let path = if url.starts_with("~/") {
+            dirs::home_dir()
+                .unwrap_or_default()
+                .join(&url[2..])
+        } else {
+            std::path::PathBuf::from(url)
+        };
+        std::fs::read_to_string(&path)
+            .with_context(|| format!("reading local spec file {}", path.display()))?
+    };
 
     // Try JSON first, then YAML fallback
     let spec: OpenAPI = serde_json::from_str(&text).or_else(|_| {
@@ -225,28 +244,38 @@ fn collect_body(op: &Operation, spec: &OpenAPI) -> Option<ResolvedBody> {
         }
     };
 
-    // Prefer application/json
-    let (ct, media) = body
-        .content
-        .get("application/json")
-        .map(|m| ("application/json".to_string(), m))
-        .or_else(|| body.content.iter().next().map(|(k, v)| (k.clone(), v)))?;
+    // Collect all content types with their examples
+    let mut alternatives: Vec<(String, Value)> = Vec::new();
+    for (ct, media) in &body.content {
+        let example = media
+            .schema
+            .as_ref()
+            .and_then(|s| match s {
+                ReferenceOr::Item(schema) => Some(generate_example(schema, spec, 0)),
+                ReferenceOr::Reference { reference } => {
+                    resolve_schema_ref(reference, spec).map(|s| generate_example(&s, spec, 0))
+                }
+            })
+            .unwrap_or(json!({}));
+        alternatives.push((ct.clone(), example));
+    }
 
-    let example = media
-        .schema
-        .as_ref()
-        .and_then(|s| match s {
-            ReferenceOr::Item(schema) => Some(generate_example(schema, spec, 0)),
-            ReferenceOr::Reference { reference } => {
-                resolve_schema_ref(reference, spec).map(|s| generate_example(&s, spec, 0))
-            }
-        })
-        .unwrap_or(json!({}));
+    if alternatives.is_empty() {
+        return None;
+    }
+
+    // Put application/json first if present, otherwise keep original order
+    if let Some(idx) = alternatives.iter().position(|(ct, _)| ct == "application/json") {
+        alternatives.swap(0, idx);
+    }
+
+    let (ct, example) = alternatives[0].clone();
 
     Some(ResolvedBody {
         content_type: ct,
         example,
         description: body.description.clone().unwrap_or_default(),
+        alternatives,
     })
 }
 

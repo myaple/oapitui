@@ -74,7 +74,9 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
 
     // --- Detail panel ---
     if let Some(server) = app.config.servers.get(app.server_list.selected) {
-        // "URL:  " prefix is 6 chars; truncate so the URL never wraps mid-string.
+        let is_local = !server.url.starts_with("http://") && !server.url.starts_with("https://");
+        let url_label = if is_local { "File: " } else { "URL:  " };
+        // label prefix is 6 chars; truncate so the URL never wraps mid-string.
         let url_budget = chunks[1].width.saturating_sub(6) as usize;
         let url_chars: Vec<char> = server.url.chars().collect();
         let url_display = if url_chars.len() > url_budget {
@@ -92,7 +94,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         let mut header: Vec<Line> = vec![
             Line::from(vec![Span::styled("Name: ", bold), Span::raw(&server.name)]),
             Line::from(vec![
-                Span::styled("URL:  ", bold),
+                Span::styled(url_label, bold),
                 Span::styled(url_display, Style::default().fg(app.theme.text_url)),
             ]),
         ];

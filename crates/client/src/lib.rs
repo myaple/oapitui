@@ -13,6 +13,9 @@ pub struct RequestDef {
     pub query_params: HashMap<String, String>,
     pub headers: HashMap<String, String>,
     pub body: Option<Value>,
+    /// Content type for the body (e.g. "application/json", "application/xml", "text/plain").
+    /// Defaults to "application/json" if not set.
+    pub content_type: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -63,9 +66,21 @@ pub async fn execute(req: &RequestDef, tls: &TlsConfig) -> Result<ResponseResult
 
     // Body
     if let Some(body) = &req.body {
-        builder = builder
-            .header("content-type", "application/json")
-            .json(body);
+        let ct = req.content_type.as_deref().unwrap_or("application/json");
+        if ct.contains("json") {
+            builder = builder
+                .header("content-type", ct)
+                .json(body);
+        } else {
+            // For non-JSON content types, send the body as raw text
+            let body_text = match body {
+                Value::String(s) => s.clone(),
+                _ => serde_json::to_string(body).unwrap_or_default(),
+            };
+            builder = builder
+                .header("content-type", ct)
+                .body(body_text);
+        }
     }
 
     let start = Instant::now();

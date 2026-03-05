@@ -82,6 +82,7 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
             ("↑/k↓/j", "navigate rows"),
             ("Space", "toggle optional"),
             ("e", "edit"),
+            ("t", "content-type"),
             ("c", "curl"),
             ("Esc", "stop edit / back"),
             ("Enter", "send"),

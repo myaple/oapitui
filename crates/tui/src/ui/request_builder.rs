@@ -139,21 +139,30 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
 
     if has_body && chunks.len() > 1 {
         if let Some(body_row) = rb.rows.iter().find(|r| r.kind == RowKind::Body) {
+            let ct_hint = if rb.body_content_type_count() > 1 {
+                format!(
+                    " [{}/{}] t=cycle",
+                    rb.body_alt_index + 1,
+                    rb.body_content_type_count()
+                )
+            } else {
+                String::new()
+            };
             let (border_style, title_hint) = match rb.focus {
                 FocusedPane::ParamsNav | FocusedPane::ParamsEdit => (
                     Style::default(),
-                    format!(" Body ({}) — Tab=focus ", body_row.type_label),
+                    format!(" Body ({}){ct_hint} — Tab=focus ", body_row.type_label),
                 ),
                 FocusedPane::BodyNormal => (
                     Style::default().fg(app.theme.border_active),
                     format!(
-                        " Body ({}) — NORMAL  hjkl=move  0/$=line  i/a=insert  Tab/Esc=params ",
+                        " Body ({}){ct_hint} — NORMAL  hjkl=move  0/$=line  i/a=insert  Tab/Esc=params ",
                         body_row.type_label
                     ),
                 ),
                 FocusedPane::BodyInsert => (
                     Style::default().fg(app.theme.border_editing),
-                    format!(" Body ({}) — INSERT  Esc=normal ", body_row.type_label),
+                    format!(" Body ({}){ct_hint} — INSERT  Esc=normal ", body_row.type_label),
                 ),
             };
 

@@ -60,7 +60,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
         Block::default()
             .borders(Borders::ALL)
             .border_style(field_style(AddServerField::Url))
-            .title(" OpenAPI URL "),
+            .title(" OpenAPI URL or file path "),
     );
     f.render_widget(url_input, rows[2]);
 

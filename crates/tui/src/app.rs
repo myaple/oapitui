@@ -512,6 +512,9 @@ impl App {
                         .unwrap_or(0);
                     rb.focus = FocusedPane::ParamsEdit;
                 }
+                KeyCode::Char('t') if rb.body_content_type_count() > 1 => {
+                    rb.cycle_content_type();
+                }
                 KeyCode::Tab if rb.has_body() => {
                     rb.focus = FocusedPane::BodyNormal;
                 }

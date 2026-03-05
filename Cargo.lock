@@ -768,6 +768,7 @@ name = "oapitui-openapi"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "dirs",
  "indexmap",
  "oapitui-config",
  "openapiv3",

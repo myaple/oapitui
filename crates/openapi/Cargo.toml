@@ -13,3 +13,4 @@ oapitui-config   = { path = "../config" }
 openapiv3  = "2"
 serde_yaml = "0.9"
 indexmap   = { version = "2", features = ["serde"] }
+dirs       = "5"

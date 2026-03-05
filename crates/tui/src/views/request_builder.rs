@@ -52,6 +52,11 @@ pub struct RequestBuilderState {
     pub pending_key: Option<char>,
     /// Whether the curl-command popup is visible.
     pub show_curl: bool,
+    /// All available content types and their example bodies.
+    /// Empty if the endpoint has no request body.
+    pub body_alternatives: Vec<(String, String)>,
+    /// Index into `body_alternatives` for the currently selected content type.
+    pub body_alt_index: usize,
 }
 
 impl Default for RequestBuilderState {
@@ -66,6 +71,8 @@ impl Default for RequestBuilderState {
             cursor: 0,
             pending_key: None,
             show_curl: false,
+            body_alternatives: vec![],
+            body_alt_index: 0,
         }
     }
 }
@@ -108,6 +115,7 @@ impl RequestBuilderState {
         }
 
         // Body is always appended last so param indices stay contiguous.
+        let mut body_alternatives: Vec<(String, String)> = vec![];
         if let Some(body) = &ep.request_body {
             let pretty = serde_json::to_string_pretty(&body.example).unwrap_or_default();
             rows.push(FieldRow {
@@ -118,6 +126,11 @@ impl RequestBuilderState {
                 required: false,
                 enabled: true,
             });
+            // Store all content type alternatives
+            for (ct, example) in &body.alternatives {
+                let pretty = serde_json::to_string_pretty(example).unwrap_or_default();
+                body_alternatives.push((ct.clone(), pretty));
+            }
         }
 
         Self {
@@ -130,6 +143,8 @@ impl RequestBuilderState {
             show_curl: false,
             cursor: 0,
             pending_key: None,
+            body_alternatives,
+            body_alt_index: 0,
         }
     }
 
@@ -140,6 +155,26 @@ impl RequestBuilderState {
 
     pub fn has_body(&self) -> bool {
         self.rows.iter().any(|r| r.kind == RowKind::Body)
+    }
+
+    /// Cycle to the next available content type for the request body.
+    /// Updates the body row's type_label and value.
+    pub fn cycle_content_type(&mut self) {
+        if self.body_alternatives.len() <= 1 {
+            return;
+        }
+        self.body_alt_index = (self.body_alt_index + 1) % self.body_alternatives.len();
+        let (ct, example) = &self.body_alternatives[self.body_alt_index];
+        if let Some(row) = self.rows.iter_mut().find(|r| r.kind == RowKind::Body) {
+            row.type_label = ct.clone();
+            row.value = example.clone();
+        }
+        self.cursor = 0;
+    }
+
+    /// Returns the number of available body content types.
+    pub fn body_content_type_count(&self) -> usize {
+        self.body_alternatives.len()
     }
 
     // ── Params-pane toggle ────────────────────────────────────────────────────
@@ -449,6 +484,7 @@ impl RequestBuilderState {
         let mut query_params = HashMap::new();
         let mut headers = HashMap::new();
         let mut body: Option<Value> = None;
+        let mut content_type: Option<String> = None;
 
         for row in &self.rows {
             match row.kind {
@@ -468,7 +504,12 @@ impl RequestBuilderState {
                     }
                 }
                 RowKind::Body => {
+                    content_type = Some(row.type_label.clone());
                     body = serde_json::from_str(&row.value).ok();
+                    // If the body isn't valid JSON, send as raw text
+                    if body.is_none() && !row.value.trim().is_empty() {
+                        body = Some(Value::String(row.value.clone()));
+                    }
                 }
             }
         }
@@ -481,6 +522,7 @@ impl RequestBuilderState {
             query_params,
             headers,
             body,
+            content_type,
         }
     }
 }
