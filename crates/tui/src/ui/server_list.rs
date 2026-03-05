@@ -10,7 +10,7 @@ use ratatui::{
 
 pub fn render(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default().borders(Borders::ALL).title(Span::styled(
-        " oapitui — Servers ",
+        " oat — Servers",
         super::title_style(&app.theme),
     ));
 

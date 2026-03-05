@@ -189,14 +189,14 @@ impl Config {
 pub fn default_config_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("oapitui")
+        .join("oat")
         .join("config.toml")
 }
 
 pub fn default_history_path() -> PathBuf {
     dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("oapitui")
+        .join("oat")
         .join("history.json")
 }
 
