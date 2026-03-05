@@ -3,6 +3,30 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// A named set of variables that can be substituted into parameter values.
+///
+/// ```toml
+/// [[environments]]
+/// name = "dev"
+/// [environments.variables]
+/// base_url = "http://localhost:3000"
+/// api_key  = "dev-key-123"
+///
+/// [[environments]]
+/// name = "prod"
+/// [environments.variables]
+/// base_url = "https://api.example.com"
+/// api_key  = "prod-key-secret"
+/// ```
+///
+/// Values containing `{{variable_name}}` are replaced before sending requests.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Environment {
+    pub name: String,
+    #[serde(default)]
+    pub variables: HashMap<String, String>,
+}
+
 /// All theme color overrides. Each field accepts a color name (e.g. `"cyan"`,
 /// `"dark_gray"`) or a hex value (e.g. `"#1e1e2e"`). Omitted fields use the
 /// built-in defaults.
@@ -83,6 +107,8 @@ pub struct ThemeConfig {
 pub struct Config {
     #[serde(default)]
     pub servers: Vec<ServerEntry>,
+    #[serde(default)]
+    pub environments: Vec<Environment>,
     #[serde(default)]
     pub theme: ThemeConfig,
 }
@@ -165,4 +191,72 @@ pub fn default_config_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
         .join("oapitui")
         .join("config.toml")
+}
+
+pub fn default_history_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("oapitui")
+        .join("history.json")
+}
+
+/// A single saved request/response entry in the history log.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryEntry {
+    pub timestamp: String,
+    pub server_name: String,
+    pub method: String,
+    pub path: String,
+    pub url: String,
+    pub status: u16,
+    pub elapsed_ms: u128,
+    /// Snapshot of query/header param values (not body — can be large).
+    pub params: HashMap<String, String>,
+}
+
+const MAX_HISTORY: usize = 200;
+
+/// Load the history log from disk.
+pub fn load_history(path: Option<&PathBuf>) -> Vec<HistoryEntry> {
+    let p = match path {
+        Some(p) => p.clone(),
+        None => default_history_path(),
+    };
+    if !p.exists() {
+        return Vec::new();
+    }
+    std::fs::read_to_string(&p)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+/// Append an entry to the history log and persist to disk.
+pub fn save_history_entry(entry: HistoryEntry, path: Option<&PathBuf>) {
+    let p = match path {
+        Some(p) => p.clone(),
+        None => default_history_path(),
+    };
+    let mut entries = load_history(Some(&p));
+    entries.push(entry);
+    // Keep only the most recent entries
+    if entries.len() > MAX_HISTORY {
+        entries.drain(..entries.len() - MAX_HISTORY);
+    }
+    if let Some(parent) = p.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(&entries) {
+        let _ = std::fs::write(&p, json);
+    }
+}
+
+/// Apply environment variable substitution to a string.
+/// Replaces `{{var_name}}` with the value from the variables map.
+pub fn substitute_vars(input: &str, vars: &HashMap<String, String>) -> String {
+    let mut result = input.to_string();
+    for (key, val) in vars {
+        result = result.replace(&format!("{{{{{key}}}}}"), val);
+    }
+    result
 }

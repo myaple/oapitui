@@ -66,6 +66,39 @@ All three paths are optional — omit `ca_cert` to use system roots; omit the ce
 
 Servers are saved automatically when added through the TUI. mTLS paths entered in the Add Server form are persisted to the config file.
 
+### Environments
+
+Define named environments with variables that are substituted into parameter values, headers, and URLs before sending requests. Use `{{variable_name}}` syntax in any parameter value.
+
+```toml
+[[environments]]
+name = "dev"
+[environments.variables]
+base_url = "http://localhost:3000"
+api_key  = "dev-key-123"
+token    = "Bearer dev-token"
+
+[[environments]]
+name = "staging"
+[environments.variables]
+base_url = "https://staging.example.com"
+api_key  = "staging-key-456"
+token    = "Bearer staging-token"
+
+[[environments]]
+name = "prod"
+[environments.variables]
+base_url = "https://api.example.com"
+api_key  = "prod-key-secret"
+token    = "Bearer prod-token"
+```
+
+Press `E` from the server list, endpoint list, or request builder to switch environments. The active environment is shown in the bottom-right of the help bar.
+
+### Request History
+
+Every successful request is automatically saved to `~/.config/oapitui/history.json` (up to 200 entries). Press `H` from the server list to browse history, filter by method/path/server, and re-open past requests with their saved parameter values.
+
 ---
 
 ## Usage
@@ -83,6 +116,8 @@ oapitui
 | `a` | Add server |
 | `d` | Delete server |
 | `r` | Refresh spec |
+| `H` | Open request history |
+| `E` | Switch environment |
 | `Ctrl+C` | Quit |
 
 ### Endpoint list
@@ -91,6 +126,7 @@ oapitui
 |-----|--------|
 | `j` / `k` | Navigate endpoints |
 | `/` | Filter by method, path, or summary |
+| `E` | Switch environment |
 | `Enter` | Open endpoint |
 | `Esc` | Back |
 
@@ -104,6 +140,7 @@ The request builder has two panes: a **params table** (top) and a **body editor*
 |-----|--------|
 | `j` / `k` | Move between parameters |
 | `e` | Edit selected value |
+| `E` | Switch environment |
 | `Esc` | Stop editing / go back |
 | `Tab` | Focus body pane |
 | `Enter` | Send request |
@@ -134,6 +171,17 @@ The request builder has two panes: a **params table** (top) and a **body editor*
 | `j` / `k` | Scroll |
 | `h` | Toggle response headers |
 | `Esc` | Back |
+
+### History
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Navigate entries |
+| `PgUp` / `PgDn` | Page through entries |
+| `/` | Filter by method, path, or server |
+| `Enter` | Re-open endpoint with saved params |
+| `d` | Delete selected entry |
+| `Esc` | Back to server list |
 
 ---
 

@@ -1,13 +1,14 @@
 use crate::theme::Theme;
 use crate::views::{
     add_server::AddServerState, endpoint_list::EndpointListState,
+    env_picker::EnvPickerState, history::HistoryState,
     request_builder::RequestBuilderState, response_viewer::ResponseViewerState,
     server_list::ServerListState,
 };
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use oapitui_client::ResponseResult;
-use oapitui_config::{Config, ServerEntry};
+use oapitui_config::{Config, HistoryEntry, ServerEntry};
 use oapitui_openapi::{extract_endpoints, fetch_spec, openapiv3::OpenAPI};
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{
@@ -39,6 +40,7 @@ pub enum Screen {
     EndpointList,
     RequestBuilder,
     ResponseViewer,
+    History,
 }
 
 pub struct App {
@@ -64,6 +66,13 @@ pub struct App {
     pub endpoint_list: EndpointListState,
     pub request_builder: RequestBuilderState,
     pub response_viewer: ResponseViewerState,
+    pub history: HistoryState,
+
+    // Environment state
+    /// Index into `config.environments`, or `None` for no active environment.
+    pub active_env: Option<usize>,
+    /// Popup state for the environment picker (Some = visible).
+    pub env_picker: Option<EnvPickerState>,
 
     // Transient error banner
     pub error: Option<String>,
@@ -77,6 +86,12 @@ impl App {
         let config = Config::load(path_ref)?;
         let theme = Theme::from_config(&config.theme);
         let (tx, rx) = mpsc::unbounded_channel();
+
+        let history_path = config_path
+            .as_ref()
+            .and_then(|p| p.parent())
+            .map(|dir| dir.join("history.json"));
+        let history_entries = oapitui_config::load_history(history_path.as_ref());
 
         Ok(Self {
             config,
@@ -93,6 +108,9 @@ impl App {
             endpoint_list: EndpointListState::default(),
             request_builder: RequestBuilderState::default(),
             response_viewer: ResponseViewerState::default(),
+            history: HistoryState::new(history_entries),
+            active_env: None,
+            env_picker: None,
             error: None,
             should_quit: false,
         })
@@ -149,6 +167,11 @@ impl App {
             }
             BgMsg::ResponseReady(resp) => {
                 self.response_viewer = ResponseViewerState::from_response(resp);
+                // Refresh in-memory history
+                let history_path = self.history_path();
+                self.history = HistoryState::new(
+                    oapitui_config::load_history(history_path.as_ref()),
+                );
                 self.screen = Screen::ResponseViewer;
             }
             BgMsg::ResponseError(e) => {
@@ -174,12 +197,19 @@ impl App {
             return Ok(());
         }
 
+        // Environment picker popup intercepts all keys when visible
+        if self.env_picker.is_some() {
+            self.handle_env_picker(code);
+            return Ok(());
+        }
+
         match self.screen {
             Screen::ServerList => self.handle_server_list(code, modifiers).await?,
             Screen::AddServer => self.handle_add_server(code),
             Screen::EndpointList => self.handle_endpoint_list(code),
             Screen::RequestBuilder => self.handle_request_builder(code, modifiers).await?,
             Screen::ResponseViewer => self.handle_response_viewer(code),
+            Screen::History => self.handle_history(code),
         }
         Ok(())
     }
@@ -215,6 +245,13 @@ impl App {
                     let page = self.server_list.page_size.get().max(1) as usize;
                     self.server_list.selected = (self.server_list.selected + page).min(n - 1);
                 }
+            }
+            KeyCode::Char('H') => {
+                self.history.selected = 0;
+                self.screen = Screen::History;
+            }
+            KeyCode::Char('E') => {
+                self.open_env_picker();
             }
             KeyCode::Char('a') => {
                 self.add_server = AddServerState::default();
@@ -386,6 +423,10 @@ impl App {
                 el.detail_focused = true;
                 el.detail_scroll = 0;
             }
+            KeyCode::Char('E') if !el.filter_active => {
+                self.open_env_picker();
+                return;
+            }
             KeyCode::Char('s') if !el.filter_active => {
                 el.sort_mode = el.sort_mode.next();
                 el.selected = 0;
@@ -458,6 +499,10 @@ impl App {
                 KeyCode::Char('k') | KeyCode::Up => rb.prev_row(),
                 KeyCode::Char(' ') => rb.toggle_enabled(),
                 KeyCode::Char('c') => rb.show_curl = true,
+                KeyCode::Char('E') => {
+                    self.open_env_picker();
+                    return Ok(());
+                }
                 KeyCode::Char('e') => {
                     // Focus the param value for editing; place cursor at end.
                     rb.cursor = rb
@@ -471,7 +516,13 @@ impl App {
                     rb.focus = FocusedPane::BodyNormal;
                 }
                 KeyCode::Enter => {
-                    let req = rb.build_request();
+                    let mut req = rb.build_request();
+                    let path_template = rb.path_template.clone();
+                    let method = rb.method.clone();
+                    // Apply environment variable substitution
+                    if let Some(vars) = self.active_env_vars() {
+                        req = Self::substitute_request(req, &vars);
+                    }
                     let tls = self
                         .config
                         .servers
@@ -480,9 +531,39 @@ impl App {
                         .map(|s| s.tls.clone())
                         .unwrap_or_default();
                     let tx = self.tx.clone();
+                    let server_name = self.endpoint_list.server_name.clone();
+                    let history_path = self.history_path();
                     tokio::spawn(async move {
+                        let resolved_url = req.resolved_url();
                         match oapitui_client::execute(&req, &tls).await {
                             Ok(resp) => {
+                                // Save to history
+                                let mut params = HashMap::new();
+                                for (k, v) in &req.query_params {
+                                    params.insert(format!("query:{k}"), v.clone());
+                                }
+                                for (k, v) in &req.headers {
+                                    params.insert(format!("header:{k}"), v.clone());
+                                }
+                                for (k, v) in &req.path_params {
+                                    params.insert(format!("path:{k}"), v.clone());
+                                }
+                                let entry = HistoryEntry {
+                                    timestamp: chrono::Utc::now()
+                                        .format("%Y-%m-%d %H:%M:%S UTC")
+                                        .to_string(),
+                                    server_name,
+                                    method,
+                                    path: path_template,
+                                    url: resolved_url,
+                                    status: resp.status,
+                                    elapsed_ms: resp.elapsed.as_millis(),
+                                    params,
+                                };
+                                oapitui_config::save_history_entry(
+                                    entry,
+                                    history_path.as_ref(),
+                                );
                                 let _ = tx.send(BgMsg::ResponseReady(resp));
                             }
                             Err(e) => {
@@ -612,6 +693,206 @@ impl App {
             KeyCode::Char('s') => rv.save_dialog = Some(String::new()),
             _ => {}
         }
+    }
+
+    fn handle_history(&mut self, code: KeyCode) {
+        let hs = &mut self.history;
+        match code {
+            KeyCode::Esc if hs.filter_active => {
+                hs.filter_active = false;
+                hs.filter.clear();
+                hs.selected = 0;
+            }
+            KeyCode::Esc if !hs.filter.is_empty() => {
+                hs.filter.clear();
+                hs.selected = 0;
+            }
+            KeyCode::Esc => self.screen = Screen::ServerList,
+            KeyCode::Char('q') if !hs.filter_active => self.should_quit = true,
+            KeyCode::Char('j') | KeyCode::Down if !hs.filter_active => hs.next(),
+            KeyCode::Char('k') | KeyCode::Up if !hs.filter_active => hs.prev(),
+            KeyCode::PageUp if !hs.filter_active => hs.page_up(),
+            KeyCode::PageDown if !hs.filter_active => hs.page_down(),
+            KeyCode::Char('/') if !hs.filter_active => {
+                hs.filter_active = true;
+                hs.filter.clear();
+                hs.selected = 0;
+            }
+            KeyCode::Backspace if hs.filter_active => {
+                hs.filter.pop();
+                hs.selected = 0;
+            }
+            KeyCode::Char(c) if hs.filter_active => {
+                hs.filter.push(c);
+                hs.selected = 0;
+            }
+            KeyCode::Enter if hs.filter_active => {
+                hs.filter_active = false;
+            }
+            KeyCode::Char('d') if !hs.filter_active => {
+                // Delete selected history entry
+                if let Some(entry) = hs.selected_entry() {
+                    let timestamp = entry.timestamp.clone();
+                    hs.entries.retain(|e| e.timestamp != timestamp);
+                    if hs.selected > 0 && hs.selected >= hs.filtered().len() {
+                        hs.selected -= 1;
+                    }
+                }
+                // Persist outside the mutable borrow of hs
+                let history_path = self.history_path();
+                let p = history_path
+                    .unwrap_or_else(oapitui_config::default_history_path);
+                if let Ok(json) = serde_json::to_string_pretty(&self.history.entries) {
+                    let _ = std::fs::write(p, json);
+                }
+            }
+            KeyCode::Enter if !hs.filter_active => {
+                // Re-open the endpoint from history: navigate to the server's endpoint list
+                // and find the matching endpoint
+                if let Some(entry) = hs.selected_entry().cloned() {
+                    // Find the server and its spec
+                    if let Some(spec) = self.specs.get(&entry.server_name) {
+                        let endpoints = extract_endpoints(spec);
+                        // Find matching endpoint
+                        let ep_match = endpoints.iter().find(|ep| {
+                            ep.method == entry.method && ep.path == entry.path
+                        }).cloned();
+                        if let Some(ep) = ep_match {
+                            let server_entry = self
+                                .config
+                                .servers
+                                .iter()
+                                .find(|s| s.name == entry.server_name);
+                            let server_base = spec
+                                .servers
+                                .first()
+                                .map(|s| {
+                                    let spec_url = server_entry
+                                        .map(|se| se.url.as_str())
+                                        .unwrap_or("");
+                                    resolve_server_base(spec_url, &s.url)
+                                })
+                                .unwrap_or_default();
+                            let default_headers = server_entry
+                                .map(|s| s.default_headers.clone())
+                                .unwrap_or_default();
+
+                            self.endpoint_list = EndpointListState::new(
+                                endpoints,
+                                entry.server_name.clone(),
+                                server_base.clone(),
+                            );
+                            self.request_builder = RequestBuilderState::from_endpoint(
+                                &ep,
+                                server_base,
+                                default_headers,
+                            );
+
+                            // Restore param values from history snapshot
+                            for row in &mut self.request_builder.rows {
+                                let key = match row.kind {
+                                    crate::views::request_builder::RowKind::PathParam => {
+                                        format!("path:{}", row.name)
+                                    }
+                                    crate::views::request_builder::RowKind::QueryParam => {
+                                        format!("query:{}", row.name)
+                                    }
+                                    crate::views::request_builder::RowKind::Header => {
+                                        format!("header:{}", row.name)
+                                    }
+                                    crate::views::request_builder::RowKind::Body => continue,
+                                };
+                                if let Some(val) = entry.params.get(&key) {
+                                    row.value = val.clone();
+                                    row.enabled = true;
+                                }
+                            }
+
+                            self.screen = Screen::RequestBuilder;
+                        } else {
+                            self.error = Some(format!(
+                                "Endpoint {} {} not found in current spec",
+                                entry.method, entry.path
+                            ));
+                        }
+                    } else {
+                        self.error = Some(format!(
+                            "Spec for '{}' not loaded — go back and open that server first",
+                            entry.server_name
+                        ));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_env_picker(&mut self, code: KeyCode) {
+        let picker = match &mut self.env_picker {
+            Some(p) => p,
+            None => return,
+        };
+        match code {
+            KeyCode::Char('j') | KeyCode::Down => picker.next(),
+            KeyCode::Char('k') | KeyCode::Up => picker.prev(),
+            KeyCode::Enter => {
+                self.active_env = picker.chosen_env();
+                self.env_picker = None;
+            }
+            KeyCode::Esc => {
+                self.env_picker = None;
+            }
+            _ => {}
+        }
+    }
+
+    fn open_env_picker(&mut self) {
+        if self.config.environments.is_empty() {
+            self.error = Some(
+                "No environments configured. Add [[environments]] to your config.toml".to_string(),
+            );
+            return;
+        }
+        self.env_picker = Some(EnvPickerState::new(
+            self.config.environments.len(),
+            self.active_env,
+        ));
+    }
+
+    /// Get the active environment's variables, if any.
+    fn active_env_vars(&self) -> Option<HashMap<String, String>> {
+        self.active_env.and_then(|idx| {
+            self.config
+                .environments
+                .get(idx)
+                .map(|env| env.variables.clone())
+        })
+    }
+
+    /// Apply variable substitution to all string fields in a request.
+    fn substitute_request(
+        mut req: oapitui_client::RequestDef,
+        vars: &HashMap<String, String>,
+    ) -> oapitui_client::RequestDef {
+        req.base_url = oapitui_config::substitute_vars(&req.base_url, vars);
+        req.path_template = oapitui_config::substitute_vars(&req.path_template, vars);
+        for val in req.path_params.values_mut() {
+            *val = oapitui_config::substitute_vars(val, vars);
+        }
+        for val in req.query_params.values_mut() {
+            *val = oapitui_config::substitute_vars(val, vars);
+        }
+        for val in req.headers.values_mut() {
+            *val = oapitui_config::substitute_vars(val, vars);
+        }
+        req
+    }
+
+    fn history_path(&self) -> Option<PathBuf> {
+        self.config_path
+            .as_ref()
+            .and_then(|p| p.parent())
+            .map(|dir| dir.join("history.json"))
     }
 
     fn spawn_fetch(&mut self, name: String, url: String, tls: oapitui_config::TlsConfig) {

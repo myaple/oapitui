@@ -1,5 +1,7 @@
 mod add_server;
 mod endpoint_list;
+mod env_picker;
+mod history;
 mod request_builder;
 mod response_viewer;
 mod server_list;
@@ -32,9 +34,16 @@ pub fn render(f: &mut Frame, app: &App) {
         Screen::EndpointList => endpoint_list::render(f, app, chunks[0]),
         Screen::RequestBuilder => request_builder::render(f, app, chunks[0]),
         Screen::ResponseViewer => response_viewer::render(f, app, chunks[0]),
+        Screen::History => history::render(f, app, chunks[0]),
+    }
+
+    // Environment picker popup (overlays any screen)
+    if app.env_picker.is_some() {
+        env_picker::render(f, app, area);
     }
 
     render_help_bar(f, app, chunks[1]);
+    render_env_indicator(f, app, chunks[1]);
     render_error(f, app, area);
 }
 
@@ -48,6 +57,8 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
             ("a", "add"),
             ("d", "delete"),
             ("r", "refresh"),
+            ("H", "history"),
+            ("E", "env"),
             ("q/^C", "quit"),
         ],
         Screen::AddServer => &[
@@ -64,6 +75,7 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
             ("c", "curl"),
             ("Tab", "detail"),
             ("Enter", "open"),
+            ("E", "env"),
             ("q", "quit"),
         ],
         Screen::RequestBuilder => &[
@@ -73,6 +85,7 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
             ("c", "curl"),
             ("Esc", "stop edit / back"),
             ("Enter", "send"),
+            ("E", "env"),
             ("q", "quit"),
         ],
         Screen::ResponseViewer => &[
@@ -81,6 +94,15 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
             ("Home/End", "top/bottom"),
             ("h", "toggle headers"),
             ("s", "save"),
+            ("q", "quit"),
+        ],
+        Screen::History => &[
+            ("↑/k↓/j", "navigate"),
+            ("PgUp/PgDn", "page"),
+            ("/", "filter"),
+            ("Enter", "re-open"),
+            ("d", "delete"),
+            ("Esc", "back"),
             ("q", "quit"),
         ],
     };
@@ -175,4 +197,27 @@ pub fn selected_style(theme: &Theme) -> Style {
     Style::default()
         .bg(theme.selected_bg)
         .add_modifier(Modifier::BOLD)
+}
+
+/// Show the active environment name in the right side of the help bar.
+fn render_env_indicator(f: &mut Frame, app: &App, area: Rect) {
+    let label = match app.active_env {
+        Some(idx) => {
+            if let Some(env) = app.config.environments.get(idx) {
+                format!(" env: {} ", env.name)
+            } else {
+                return;
+            }
+        }
+        None => return,
+    };
+    let width = label.len() as u16;
+    let x = area.x + area.width.saturating_sub(width);
+    let indicator_area = Rect::new(x, area.y, width, 1);
+    let widget = Paragraph::new(label).style(
+        Style::default()
+            .fg(app.theme.text_accent)
+            .add_modifier(Modifier::BOLD),
+    );
+    f.render_widget(widget, indicator_area);
 }
