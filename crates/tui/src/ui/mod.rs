@@ -45,6 +45,7 @@ pub fn render(f: &mut Frame, app: &App) {
     render_help_bar(f, app, chunks[1]);
     render_env_indicator(f, app, chunks[1]);
     render_error(f, app, area);
+    render_flash(f, app, area);
 }
 
 fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
@@ -151,6 +152,25 @@ fn render_error(f: &mut Frame, app: &App, area: Rect) {
             .wrap(Wrap { trim: true })
             .block(block);
         f.render_widget(msg, popup_area);
+    }
+}
+
+fn render_flash(f: &mut Frame, app: &App, area: Rect) {
+    if let Some(msg) = &app.flash {
+        let width = (msg.len() as u16 + 4).min(area.width.saturating_sub(4));
+        let height = 3;
+        let x = area.width.saturating_sub(width) / 2;
+        let y = area.height.saturating_sub(height + 2);
+        let popup_area = Rect::new(x, y, width, height);
+
+        f.render_widget(Clear, popup_area);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(app.theme.indicator_success));
+        let para = Paragraph::new(msg.as_str())
+            .style(Style::default().fg(app.theme.indicator_success))
+            .block(block);
+        f.render_widget(para, popup_area);
     }
 }
 

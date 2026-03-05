@@ -79,6 +79,11 @@ pub struct App {
 
     // Transient error banner
     pub error: Option<String>,
+    /// Transient success/info flash message (shown with success styling, dismissed on any key).
+    pub flash: Option<String>,
+
+    // Persistent clipboard handle (kept alive to avoid Linux/X11 drop issues)
+    clipboard: Option<arboard::Clipboard>,
 
     pub should_quit: bool,
 }
@@ -115,6 +120,8 @@ impl App {
             active_env: None,
             env_picker: None,
             error: None,
+            flash: None,
+            clipboard: arboard::Clipboard::new().ok(),
             should_quit: false,
         })
     }
@@ -210,9 +217,13 @@ impl App {
             return Ok(());
         }
 
-        // Dismiss error banner with any key
+        // Dismiss error/flash banner with any key
         if self.error.is_some() && code != KeyCode::Null {
             self.error = None;
+            return Ok(());
+        }
+        if self.flash.is_some() && code != KeyCode::Null {
+            self.flash = None;
             return Ok(());
         }
 
@@ -941,8 +952,20 @@ impl App {
     }
 
     fn copy_to_clipboard(&mut self, text: &str) {
-        match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text.to_string())) {
-            Ok(()) => self.error = Some("Copied to clipboard!".to_string()),
+        let result = if let Some(cb) = &mut self.clipboard {
+            cb.set_text(text.to_string())
+        } else {
+            match arboard::Clipboard::new() {
+                Ok(mut cb) => {
+                    let r = cb.set_text(text.to_string());
+                    self.clipboard = Some(cb);
+                    r
+                }
+                Err(e) => Err(e),
+            }
+        };
+        match result {
+            Ok(()) => self.flash = Some("Copied to clipboard!".to_string()),
             Err(e) => self.error = Some(format!("Clipboard error: {e}")),
         }
     }
