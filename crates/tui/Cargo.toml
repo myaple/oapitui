@@ -21,3 +21,6 @@ ratatui          = "0.29"
 pulldown-cmark   = { version = "0.13", default-features = false }
 crossterm  = { version = "0.28", features = ["event-stream"] }
 chrono     = "0.4"
+arboard    = "3"
+notify     = "7"
+dirs       = "5"

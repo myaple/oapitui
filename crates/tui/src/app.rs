@@ -32,6 +32,9 @@ pub enum BgMsg {
     },
     ResponseReady(ResponseResult),
     ResponseError(String),
+    SpecFileChanged {
+        server_name: String,
+    },
 }
 
 pub enum Screen {
@@ -131,6 +134,9 @@ impl App {
             self.spawn_fetch(name, url, tls);
         }
 
+        // Watch local spec files for changes (auto-refresh)
+        self.start_file_watchers();
+
         loop {
             terminal.draw(|f| crate::ui::render(f, self))?;
 
@@ -176,6 +182,19 @@ impl App {
             }
             BgMsg::ResponseError(e) => {
                 self.error = Some(format!("Request failed: {e}"));
+            }
+            BgMsg::SpecFileChanged { server_name } => {
+                // Skip if already loading
+                if self.spec_loading.get(&server_name) == Some(&true) {
+                    return;
+                }
+                if let Some(server) = self.config.servers.iter().find(|s| s.name == server_name) {
+                    self.spawn_fetch(
+                        server.name.clone(),
+                        server.url.clone(),
+                        server.tls.clone(),
+                    );
+                }
             }
         }
     }
@@ -373,16 +392,26 @@ impl App {
     }
 
     fn handle_endpoint_list(&mut self, code: KeyCode) {
-        let el = &mut self.endpoint_list;
-
-        // Curl popup: Esc or 'c' closes it; all other keys are swallowed
-        if el.show_curl {
+        // Curl popup: handle before taking `el` borrow so we can call self methods
+        if self.endpoint_list.show_curl {
             match code {
-                KeyCode::Esc | KeyCode::Char('c') => el.show_curl = false,
+                KeyCode::Esc | KeyCode::Char('c') => self.endpoint_list.show_curl = false,
+                KeyCode::Char('y') => {
+                    let curl = self
+                        .endpoint_list
+                        .selected_endpoint()
+                        .map(|ep| build_curl_command(&self.endpoint_list.server_base, ep));
+                    self.endpoint_list.show_curl = false;
+                    if let Some(curl) = curl {
+                        self.copy_to_clipboard(&curl);
+                    }
+                }
                 _ => {}
             }
             return;
         }
+
+        let el = &mut self.endpoint_list;
 
         // Detail panel focus: j/k scroll the detail, Tab or Esc unfocuses
         if el.detail_focused {
@@ -479,16 +508,22 @@ impl App {
         _modifiers: KeyModifiers,
     ) -> Result<()> {
         use crate::views::request_builder::FocusedPane;
-        let rb = &mut self.request_builder;
 
-        // Curl popup: dismiss on Esc or c before routing to normal handlers.
-        if rb.show_curl {
+        // Curl popup: handle before taking `rb` borrow so we can call self methods
+        if self.request_builder.show_curl {
             match code {
-                KeyCode::Esc | KeyCode::Char('c') => rb.show_curl = false,
+                KeyCode::Esc | KeyCode::Char('c') => self.request_builder.show_curl = false,
+                KeyCode::Char('y') => {
+                    let curl = self.request_builder.curl_command();
+                    self.request_builder.show_curl = false;
+                    self.copy_to_clipboard(&curl);
+                }
                 _ => {}
             }
             return Ok(());
         }
+
+        let rb = &mut self.request_builder;
 
         match rb.focus {
             // ── Top pane: navigating param rows ──────────────────────────────
@@ -642,6 +677,13 @@ impl App {
     }
 
     fn handle_response_viewer(&mut self, code: KeyCode) {
+        // Clipboard copy: handle before taking `rv` borrow
+        if code == KeyCode::Char('y') && self.response_viewer.save_dialog.is_none() {
+            let body = self.response_viewer.body.clone();
+            self.copy_to_clipboard(&body);
+            return;
+        }
+
         let rv = &mut self.response_viewer;
 
         // Save dialog: handle filename input
@@ -898,6 +940,83 @@ impl App {
             .map(|dir| dir.join("history.json"))
     }
 
+    fn copy_to_clipboard(&mut self, text: &str) {
+        match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text.to_string())) {
+            Ok(()) => self.error = Some("Copied to clipboard!".to_string()),
+            Err(e) => self.error = Some(format!("Clipboard error: {e}")),
+        }
+    }
+
+    /// Start watching local spec files for changes to auto-reload.
+    fn start_file_watchers(&self) {
+        let local_servers: Vec<(String, String)> = self
+            .config
+            .servers
+            .iter()
+            .filter(|s| !s.url.starts_with("http://") && !s.url.starts_with("https://"))
+            .map(|s| (s.name.clone(), s.url.clone()))
+            .collect();
+
+        if local_servers.is_empty() {
+            return;
+        }
+
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+
+            let (notify_tx, notify_rx) = std::sync::mpsc::channel();
+            let mut watcher = match RecommendedWatcher::new(notify_tx, Config::default()) {
+                Ok(w) => w,
+                Err(_) => return,
+            };
+
+            let mut path_to_server: HashMap<PathBuf, String> = HashMap::new();
+            for (name, url) in &local_servers {
+                let path = expand_local_path(url);
+                if path.exists() {
+                    let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+                    // Watch the parent directory (some editors replace the file atomically)
+                    let watch_path = canonical.parent().unwrap_or(&canonical);
+                    let _ = watcher.watch(watch_path, RecursiveMode::NonRecursive);
+                    path_to_server.insert(canonical, name.clone());
+                }
+            }
+
+            // Track last event time per server to debounce
+            let mut last_event: HashMap<String, Instant> = HashMap::new();
+
+            for event in notify_rx.iter() {
+                if let Ok(event) = event {
+                    if matches!(
+                        event.kind,
+                        EventKind::Modify(_) | EventKind::Create(_)
+                    ) {
+                        for path in &event.paths {
+                            let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+                            if let Some(name) = path_to_server.get(&canonical) {
+                                // Debounce: skip if last event was within 1 second
+                                let now = Instant::now();
+                                if let Some(last) = last_event.get(name) {
+                                    if now.duration_since(*last) < Duration::from_secs(1) {
+                                        continue;
+                                    }
+                                }
+                                last_event.insert(name.clone(), now);
+                                let _ = tx.send(BgMsg::SpecFileChanged {
+                                    server_name: name.clone(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Keep watcher alive (it's dropped when the app exits and the thread ends)
+            drop(watcher);
+        });
+    }
+
     fn spawn_fetch(&mut self, name: String, url: String, tls: oapitui_config::TlsConfig) {
         self.spec_loading.insert(name.clone(), true);
         let tx = self.tx.clone();
@@ -940,6 +1059,16 @@ fn resolve_server_base(spec_url: &str, server_url: &str) -> String {
         return format!("{origin}{path}");
     }
     server_url.to_string()
+}
+
+fn expand_local_path(url: &str) -> PathBuf {
+    if url.starts_with("~/") {
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(&url[2..])
+    } else {
+        PathBuf::from(url)
+    }
 }
 
 fn non_empty(s: &str) -> Option<String> {

@@ -94,6 +94,7 @@ fn render_help_bar(f: &mut Frame, app: &App, area: Rect) {
             ("PgUp/PgDn", "page"),
             ("Home/End", "top/bottom"),
             ("h", "toggle headers"),
+            ("y", "copy body"),
             ("s", "save"),
             ("q", "quit"),
         ],

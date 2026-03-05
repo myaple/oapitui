@@ -178,6 +178,8 @@ The request builder has two panes: a **params table** (top) and a **body editor*
 |-----|--------|
 | `j` / `k` | Scroll |
 | `h` | Toggle response headers |
+| `y` | Copy response body to clipboard |
+| `s` | Save response body to file |
 | `Esc` | Back |
 
 ### History
@@ -327,3 +329,5 @@ error     = "#f38ba8"
 - Specs are fetched from the URL you provide. GitHub blob URLs (`/blob/`) won't work — use the raw URL (`/raw/` or `raw.githubusercontent.com`).
 - Both JSON and YAML specs are supported.
 - `$ref` resolution is handled inline for parameters, request bodies, and schemas.
+- **Clipboard:** Press `y` in the curl popup or response viewer to copy to the system clipboard. Requires a display server (X11/Wayland) on Linux.
+- **Auto-refresh:** Local spec files are watched for changes and reloaded automatically — no need to press `r` manually during development.

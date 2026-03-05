@@ -182,7 +182,7 @@ pub fn render(f: &mut Frame, app: &App, area: Rect) {
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(app.theme.border_focused))
                 .title(Span::styled(
-                    " curl command (Esc/c to close) ",
+                    " curl command — y=copy  Esc/c=close ",
                     super::title_style(&app.theme),
                 ));
             let para = Paragraph::new(lines)
