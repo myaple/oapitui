@@ -18,15 +18,15 @@ RUN for dir in crates/config crates/openapi crates/client; do \
     done && \
     mkdir -p crates/tui/src && echo "fn main() {}" > crates/tui/src/main.rs
 
-RUN cargo build --release --bin oapitui --target x86_64-unknown-linux-musl 2>/dev/null; true
+RUN cargo build --release --bin oat --target x86_64-unknown-linux-musl 2>/dev/null; true
 
 COPY crates crates
 RUN touch crates/*/src/*.rs && \
-    cargo build --release --bin oapitui --target x86_64-unknown-linux-musl
+    cargo build --release --bin oat --target x86_64-unknown-linux-musl
 
 # ── Runtime stage (UBI9) ───────────────────────────────────────────────────────
 FROM registry.access.redhat.com/ubi9/ubi-minimal
 
-COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/oapitui /usr/local/bin/oapitui
+COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/oat /usr/local/bin/oat
 
-ENTRYPOINT ["/usr/local/bin/oapitui"]
+ENTRYPOINT ["/usr/local/bin/oat"]
